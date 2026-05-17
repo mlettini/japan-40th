@@ -1,4 +1,5 @@
 const STORAGE_KEY = "japan-40th-data-v4";
+const TIME_FORMAT_KEY = "japan-40th-time-format";
 const START_DATE = "2026-05-25";
 const END_DATE = "2026-06-10";
 
@@ -19,7 +20,6 @@ let expandedId = null;
 let editingId = null;
 let editBuffer = null;
 let flashTimeout;
-let saveDebounceTimer;
 let lastScrolledDate = null;
 
 function parseDate(date) {
@@ -50,25 +50,29 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (!parsed.notes) parsed.notes = {};
-      if (!parsed.timeFormat) parsed.timeFormat = "24h";
-      return parsed;
+      // Migrate old in-state timeFormat to the dedicated per-device key
+      if (parsed.timeFormat && !localStorage.getItem(TIME_FORMAT_KEY)) {
+        localStorage.setItem(TIME_FORMAT_KEY, parsed.timeFormat);
+      }
+      return normalizeState(parsed);
     }
   } catch {}
-  const fresh = structuredClone(SAMPLE_DATA);
-  fresh.notes = {};
-  fresh.timeFormat = "24h";
-  return fresh;
+  return normalizeState(structuredClone(SAMPLE_DATA));
+}
+
+function persistLocal() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function getTimeFormat() {
+  return localStorage.getItem(TIME_FORMAT_KEY) || "24h";
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  flashSaved();
-}
-
-function debouncedSave() {
-  clearTimeout(saveDebounceTimer);
-  saveDebounceTimer = setTimeout(saveState, 250);
+  persistLocal();
+  flashSaved("Saved");
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncToRemote, 800);
 }
 
 function commit() {
@@ -76,13 +80,153 @@ function commit() {
   renderDay();
 }
 
-function flashSaved() {
+function flashSaved(msg = "Saved") {
   const ind = document.querySelector("#save-indicator");
-  ind.textContent = "Saved";
+  ind.textContent = msg;
   ind.classList.add("visible");
   clearTimeout(flashTimeout);
-  flashTimeout = setTimeout(() => ind.classList.remove("visible"), 1200);
+  flashTimeout = setTimeout(() => ind.classList.remove("visible"), 1500);
 }
+
+// === Sync (JSONbin) ===
+
+const BIN_ID_KEY = "japan-40th-bin-id";
+const MASTER_KEY_KEY = "japan-40th-master-key";
+const JSONBIN_BASE = "https://api.jsonbin.io/v3";
+
+let syncTimer;
+let syncController;
+
+function getCreds() {
+  return {
+    binId: localStorage.getItem(BIN_ID_KEY),
+    key: localStorage.getItem(MASTER_KEY_KEY),
+  };
+}
+
+function hasCreds() {
+  const { binId, key } = getCreds();
+  return !!(binId && key);
+}
+
+function clearCreds() {
+  localStorage.removeItem(BIN_ID_KEY);
+  localStorage.removeItem(MASTER_KEY_KEY);
+}
+
+function normalizeState(s) {
+  if (!s.days) s.days = {};
+  if (!s.notes) s.notes = {};
+  return s;
+}
+
+async function binFetch(binId, key, signal) {
+  const res = await fetch(`${JSONBIN_BASE}/b/${binId}/latest`, {
+    headers: { "X-Master-Key": key },
+    signal,
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return (await res.json()).record;
+}
+
+async function binSave(binId, key, data, signal) {
+  const res = await fetch(`${JSONBIN_BASE}/b/${binId}`, {
+    method: "PUT",
+    headers: { "X-Master-Key": key, "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+    signal,
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+}
+
+// Pull remote; if it has a valid state shape, adopt it. Otherwise push our state up.
+async function adoptOrPush(binId, key, signal) {
+  const remote = await binFetch(binId, key, signal);
+  if (remote && typeof remote === "object" && remote.days) {
+    state = normalizeState(remote);
+    persistLocal();
+  } else {
+    await binSave(binId, key, state, signal);
+  }
+}
+
+// Returns true if caller should bail (creds rejected or request superseded).
+function handleSyncError(e, fallbackMsg) {
+  if (e.name === "AbortError") return true;
+  if (/^40[13]/.test(e.message)) {
+    clearCreds();
+    showSetup("Credentials rejected. Re-enter them.");
+    return true;
+  }
+  flashSaved(fallbackMsg);
+  return false;
+}
+
+function showSetup(msg) {
+  document.body.classList.add("needs-setup");
+  document.querySelector("#setup-error").textContent = msg || "";
+}
+
+function hideSetup() {
+  document.body.classList.remove("needs-setup");
+}
+
+function wireSetup() {
+  document.querySelector("#setup-connect").onclick = async () => {
+    const binId = document.querySelector("#setup-bin-id").value.trim();
+    const key = document.querySelector("#setup-master-key").value.trim();
+    if (!binId || !key) {
+      showSetup("Both fields are required.");
+      return;
+    }
+    try {
+      await adoptOrPush(binId, key);
+      localStorage.setItem(BIN_ID_KEY, binId);
+      localStorage.setItem(MASTER_KEY_KEY, key);
+      hideSetup();
+      setupTimeFormatToggle();
+      routeAndRender();
+    } catch (e) {
+      showSetup("Couldn't connect: " + e.message);
+    }
+  };
+}
+
+async function syncToRemote() {
+  const { binId, key } = getCreds();
+  if (!binId || !key) return;
+  if (syncController) syncController.abort();
+  syncController = new AbortController();
+  flashSaved("Syncing…");
+  try {
+    await binSave(binId, key, state, syncController.signal);
+    flashSaved("Synced");
+  } catch (e) {
+    handleSyncError(e, "Sync failed");
+  }
+}
+
+// If the tab is closing within the 800ms debounce window, fire the pending
+// PUT now with keepalive so the request survives unload (otherwise the save
+// dies with the page and remote silently rolls back on next sync).
+function flushPendingSync() {
+  if (!syncTimer) return;
+  clearTimeout(syncTimer);
+  syncTimer = null;
+  const { binId, key } = getCreds();
+  if (!binId || !key) return;
+  fetch(`${JSONBIN_BASE}/b/${binId}`, {
+    method: "PUT",
+    headers: { "X-Master-Key": key, "Content-Type": "application/json" },
+    body: JSON.stringify(state),
+    keepalive: true,
+  }).catch(() => {});
+}
+
+window.addEventListener("pagehide", flushPendingSync);
+
+// DevTools escape hatch: window.resetSync() clears credentials and reloads.
+window.resetSync = () => { clearCreds(); location.reload(); };
 
 function formatTime(time, format) {
   if (!time) return "--:--";
@@ -209,14 +353,14 @@ function renderDayNote(date) {
 
   const ta = document.createElement("textarea");
   ta.className = "day-note";
-  ta.placeholder = "Notes for the day — what's the plan?";
+  ta.placeholder = "Notes for the day — what’s the plan?";
   ta.value = (state.notes && state.notes[date]) || "";
   ta.rows = 1;
   ta.addEventListener("input", () => {
     if (!state.notes) state.notes = {};
     state.notes[date] = ta.value;
     autoResize(ta);
-    debouncedSave();
+    saveState();
   });
   wrapper.appendChild(ta);
   requestAnimationFrame(() => autoResize(ta));
@@ -227,7 +371,7 @@ function renderRow(row, date) {
 
   const el = document.createElement("div");
   el.dataset.id = row.id;
-  el.className = "row fmt-" + state.timeFormat;
+  el.className = "row fmt-" + getTimeFormat();
   if (row.category) el.classList.add("cat-" + row.category);
   if (row.highlight) el.classList.add("hl-" + row.highlight);
 
@@ -236,7 +380,7 @@ function renderRow(row, date) {
 
   const badge = row.category ? `<span class="cat-badge cat-${row.category}">${categoryLabel(row.category)}</span>` : "";
   el.innerHTML = `
-    <div class="row-time">${formatTime(row.time, state.timeFormat)}</div>
+    <div class="row-time">${formatTime(row.time, getTimeFormat())}</div>
     <div class="row-info">
       <div class="row-title">${badge}${escapeHtml(row.title || "(untitled)")}</div>
       ${row.description ? `<div class="row-desc">${escapeHtml(row.description)}</div>` : ""}
@@ -259,7 +403,7 @@ function renderRow(row, date) {
 
 function renderEditingRow(date) {
   const el = document.createElement("div");
-  el.className = "row editing fmt-" + state.timeFormat;
+  el.className = "row editing fmt-" + getTimeFormat();
   el.dataset.id = editingId;
   el.innerHTML = renderEditForm(editBuffer, dayRows(date).some(r => r.id === editingId));
   wireEditForm(el, date);
@@ -287,10 +431,10 @@ function renderEditForm(buf, isExisting) {
         <input type="time" data-field="time" value="${buf.time || ""}">
       </label>
       <label>Title
-        <input type="text" data-field="title" value="${escapeHtml(buf.title || "")}" placeholder="What's happening">
+        <input type="text" data-field="title" value="${escapeHtml(buf.title || "")}" placeholder="What’s happening?">
       </label>
       <label>Description
-        <textarea data-field="description" rows="3" placeholder="Details, reservation #, notes">${escapeHtml(buf.description || "")}</textarea>
+        <textarea data-field="description" rows="3" placeholder="Details, reservation #, notes…">${escapeHtml(buf.description || "")}</textarea>
       </label>
       <label>Category
         <div class="cat-picker">
@@ -391,25 +535,48 @@ window.addEventListener("hashchange", () => {
 
 function setupTimeFormatToggle() {
   const btn = document.querySelector("#time-format-toggle");
-  const sync = () => { btn.textContent = state.timeFormat === "12h" ? "12h" : "24h"; };
+  const sync = () => { btn.textContent = getTimeFormat() === "12h" ? "12h" : "24h"; };
   btn.onclick = () => {
-    state.timeFormat = state.timeFormat === "12h" ? "24h" : "12h";
+    localStorage.setItem(TIME_FORMAT_KEY, getTimeFormat() === "12h" ? "24h" : "12h");
     sync();
-    saveState();
     renderDay();
   };
   sync();
 }
-setupTimeFormatToggle();
 
-const initialHash = location.hash.slice(2);
-if (!DATES.includes(initialHash)) {
+function routeAndRender() {
+  const initialHash = location.hash.slice(2);
+  if (DATES.includes(initialHash)) {
+    render();
+    return;
+  }
   const todayStr = toIsoDate(new Date());
   let initial;
   if (todayStr < START_DATE) initial = START_DATE;
   else if (todayStr > END_DATE) initial = END_DATE;
   else initial = todayStr;
   location.hash = "#/" + initial;
-} else {
-  render();
+  // hashchange listener will render
 }
+
+async function initApp() {
+  setupTimeFormatToggle();
+  routeAndRender(); // render cached state immediately so slow networks don't blank the screen
+
+  // JSONbin is canonical; refresh from remote in the background
+  const { binId, key } = getCreds();
+  if (!binId || !key) return;
+
+  flashSaved("Syncing…");
+  try {
+    await adoptOrPush(binId, key);
+    flashSaved("Synced");
+    render();
+  } catch (e) {
+    if (handleSyncError(e, "Offline — using cached data")) return;
+  }
+}
+
+wireSetup();
+if (hasCreds()) initApp();
+else showSetup();

@@ -3,7 +3,8 @@
   --surface: #ffffff;
   --text: #1f1f1d;
   --text-muted: color-mix(in srgb, var(--text), transparent 35%);
-  --border: color-mix(in srgb, var(--text), transparent 85%);
+  --border: color-mix(in srgb, var(--text), transparent 86%);
+  --border-hover: color-mix(in srgb, var(--text), transparent 65%);
   --accent: #c8493b;
 
   --hl-green-bg: #e3f5e1;
@@ -21,6 +22,13 @@
   --cat-lunch-bd: #d99c5f;
   --cat-dinner-bg: #ead4e0;
   --cat-dinner-bd: #b58aa8;
+
+  /* Shape */
+  --radius: 0.5rem;
+  --radius-sm: 0.3rem;
+
+  /* Typography */
+  --text-sm: 0.9rem;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -60,13 +68,29 @@ html, body {
   line-height: 1.5;
 }
 
+/* Shared input base — overridden per-context below */
+input[type="text"],
+input[type="time"],
+input[type="password"],
+textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 0.6rem;
+  width: 100%;
+}
+
+textarea { min-height: 4.5rem; resize: vertical; }
+
 
 
 /* TOP HEADER */
 
 header {
   background: var(--bg);
-  background-clip: padding-box;
   border-bottom: 1px solid var(--border);
   padding-top: env(safe-area-inset-top);
   position: sticky;
@@ -80,7 +104,7 @@ header {
   justify-content: space-between;
   padding: 0.8rem 1rem 0.5rem;
   h1 {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     font-weight: 600;
   }
 }
@@ -88,7 +112,7 @@ header {
 .title-bar-right {
   align-items: center;
   display: flex;
-  gap: 0.62rem;
+  gap: 0.5rem;
 }
 
 #time-format-toggle {
@@ -100,7 +124,9 @@ header {
   font-family: inherit;
   font-size: 0.8rem;
   font-weight: 600;
-  padding: 0.2rem 0.62rem;
+  padding: 0.2rem 0.6rem;
+
+  &:hover { border-color: var(--border-hover); }
 }
 
 #save-indicator {
@@ -130,7 +156,7 @@ header {
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
   color: var(--text);
   cursor: pointer;
   display: flex;
@@ -140,7 +166,8 @@ header {
   min-width: 3.2rem;
   padding: 0.2rem 0.5rem;
   scroll-snap-align: center;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+
+  &:hover { border-color: var(--border-hover); }
 
   &.active {
     background: var(--text);
@@ -155,13 +182,13 @@ header {
 .day-chip-dow,
 .day-chip-mon {
   color: var(--text-muted);
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   text-transform: uppercase;
 }
 .day-chip-day {
   font-size: 1.2rem;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.2;
   margin-block: 1px;
 }
 
@@ -191,10 +218,11 @@ main {
   color: var(--text-muted);
   display: block;
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 1rem;
   line-height: 1.4;
   min-height: 1.4rem;
   overflow: hidden;
+  padding: 0;
   resize: none;
   width: 100%;
 
@@ -202,6 +230,12 @@ main {
     color: var(--text-muted);
     font-style: italic;
     opacity: 0.5;
+  }
+
+  &:hover {
+    &::placeholder {
+      opacity: 1;
+    }
   }
 }
 
@@ -219,14 +253,15 @@ main {
   align-items: start;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
   cursor: pointer;
   display: grid;
   gap: 1rem;
   grid-template-columns: 7ch 1fr;
   padding: 1rem;
   position: relative;
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+
+  &:not(.editing):not(.expanded):hover { border-color: var(--border-hover); }
 
   &.fmt-24h { grid-template-columns: 5ch 1fr; }
 
@@ -236,7 +271,9 @@ main {
 
   &.cat-transportation:not(.hl-green):not(.hl-yellow):not(.hl-red) {
     background: transparent;
-    border-color: transparent;
+    &:not(.expanded) {
+      border-color: transparent;
+    }
     .row-time { color: var(--text-muted); font-weight: 400; }
     .row-title { font-weight: 400; }
   }
@@ -246,17 +283,15 @@ main {
     display: block;
     padding: 1rem;
   }
+
+  &.expanded {
+    cursor: auto;
+  }
 }
 
-.row-time {
-  /* font-variant-numeric: tabular-nums; */
-  /* font-weight: 500; */
-  text-align: right;
-}
+.row-time { text-align: right; }
 
-.row-info {
-  overflow: hidden;
-}
+.row-info { overflow: hidden; }
 
 .row-title {
   font-weight: 500;
@@ -292,7 +327,7 @@ main {
 
 .row-desc {
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   line-height: 1.4;
   margin-top: 0.2rem;
   overflow: hidden;
@@ -314,7 +349,7 @@ main {
 
 
 
-/* ROW ADD/EDIT */
+/* ROW ADD/EDIT FORM */
 
 .form {
   display: flex;
@@ -327,25 +362,10 @@ main {
     font-weight: 600;
     gap: 0.2rem;
   }
-
-  input[type="text"],
-  input[type="time"],
-  textarea {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    color: var(--text);
-    font-family: inherit;
-    font-size: 1rem;
-    padding: 0.8rem;
-    text-transform: none;
-    width: 100%;
-  }
-
-  textarea { min-height: 4.5rem; resize: vertical; }
 }
 
-.cat-picker {
+.cat-picker,
+.hl-picker {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -354,12 +374,11 @@ main {
 .cat-btn {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 0.3rem;
+  border-radius: var(--radius-sm);
   color: var(--text);
   cursor: pointer;
   font-family: inherit;
-  font-size: 0.9rem;
-  font-weight: 400;
+  font-size: var(--text-sm);
   padding: 0.5rem;
 
   &.cat-transportation { background: transparent; border-style: dashed; }
@@ -367,15 +386,11 @@ main {
   &.cat-activity { background: var(--cat-activity-bg); border-color: var(--cat-activity-bd); }
   &.cat-lunch { background: var(--cat-lunch-bg); border-color: var(--cat-lunch-bd); }
   &.cat-dinner { background: var(--cat-dinner-bg); border-color: var(--cat-dinner-bd); }
-
-  &.selected { outline: 2px solid var(--text); outline-offset: -1px; }
 }
-
-.hl-picker { display: flex; gap: 0.5rem; }
 
 .hl-btn {
   border: 1px solid var(--border);
-  border-radius: 0.3rem;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   height: 2rem;
   width: 2.5rem;
@@ -396,8 +411,12 @@ main {
   &.hl-green { background: var(--hl-green-bg); border-color: var(--hl-green-bd); }
   &.hl-yellow { background: var(--hl-yellow-bg); border-color: var(--hl-yellow-bd); }
   &.hl-red { background: var(--hl-red-bg); border-color: var(--hl-red-bd); }
+}
 
-  &.selected { outline: 2px solid var(--text); outline-offset: -1px; }
+.cat-btn.selected,
+.hl-btn.selected {
+  outline: 2px solid var(--text);
+  outline-offset: -1px;
 }
 
 .form-actions {
@@ -414,13 +433,14 @@ main {
 .add-row,
 .edit-btn {
   background: var(--surface);
-  background-clip: padding-box;
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
   color: var(--text);
   cursor: pointer;
   font-family: inherit;
   padding: 0.5rem 1rem;
+
+  &:hover { border-color: var(--border-hover); }
 }
 
 .save-btn {
@@ -441,4 +461,98 @@ main {
   margin-top: 0.2rem;
   padding: 1rem;
   width: 100%;
+}
+
+
+
+/* SETUP SCREEN */
+
+#setup-screen {
+  align-items: center;
+  background: var(--bg);
+  display: none;
+  inset: 0;
+  justify-content: center;
+  padding: 1rem;
+  position: fixed;
+  z-index: 100;
+}
+
+body.needs-setup > #setup-screen { display: flex; }
+body.needs-setup > header,
+body.needs-setup > main { display: none; }
+
+.setup-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 30rem;
+  padding: 1.5rem;
+  width: 100%;
+
+  h1 {
+    font-size: 1.2rem;
+    font-weight: 600;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    gap: 0.2rem;
+  }
+
+  input {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+}
+
+.setup-intro {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.setup-instructions {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  padding: 0.5rem 0.8rem;
+
+  summary { cursor: pointer; font-weight: 500; }
+
+  ol { margin: 0.8rem 0 0; padding-left: 1.2rem; }
+  li { margin-bottom: 0.5rem; }
+
+  code {
+    background: var(--bg);
+    border-radius: 0.2rem;
+    font-size: 0.9em;
+    padding: 0 0.2rem;
+  }
+
+  a { color: var(--text); }
+}
+
+#setup-connect {
+  background: var(--text);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--surface);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  padding: 0.8rem;
+}
+
+#setup-error {
+  color: var(--accent);
+  font-size: var(--text-sm);
+  min-height: 1.2rem;
+
+  &:empty { display: none; }
 }
