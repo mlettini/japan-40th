@@ -23,6 +23,36 @@
   <div id="day-note-wrapper"></div>
   <div id="rows"></div>
 </main>
+
+<div id="setup-screen">
+  <div class="setup-card">
+    <h1>Set up sync</h1>
+    <p class="setup-intro">Data lives in a private JSONbin bin so all your devices stay in sync. Paste your Bin ID + Master Key once per device — the same credentials work everywhere.</p>
+
+    <details class="setup-instructions">
+      <summary>Where to find these</summary>
+      <ol>
+        <li>Sign up at <a href="https://jsonbin.io/" target="_blank" rel="noopener">jsonbin.io</a> (free).</li>
+        <li>Open <strong>API Keys</strong> in the dashboard and copy your <strong>Master Key</strong> (starts with <code>$2a$...</code>).</li>
+        <li>Open <strong>Create Bin</strong>, set visibility to <strong>Private</strong>, paste <code>{"days":{},"notes":{},"timeFormat":"24h"}</code> as content, and click Create. Copy the <strong>Bin ID</strong> from the URL.</li>
+      </ol>
+    </details>
+
+    <label>
+      Bin ID
+      <input type="text" id="setup-bin-id" placeholder="abc123def456..." autocomplete="off" autocapitalize="off" spellcheck="false">
+    </label>
+
+    <label>
+      Master Key
+      <input type="password" id="setup-master-key" placeholder="$2a$..." autocomplete="off">
+    </label>
+
+    <div id="setup-error"></div>
+    <button type="button" id="setup-connect">Connect</button>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>
