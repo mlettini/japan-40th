@@ -452,7 +452,7 @@ function renderRow(row, date) {
     <div class="row-time">${formatTime(row._displayTime ?? row.time, getTimeFormat())}</div>
     <div class="row-info">
       <div class="row-title">${badge}${escapeHtml(row.title || "(untitled)")}</div>
-      ${row.description ? `<div class="row-desc">${escapeHtml(row.description)}</div>` : ""}
+      ${row.description ? `<div class="row-desc">${escapeHtml(isExpanded ? row.description : row.description.split(/\r?\n/).map(s => s.trim()).filter(Boolean).join(", "))}</div>` : ""}
     </div>
     ${actions}
   `;
@@ -681,6 +681,8 @@ function wireEditForm(el, date) {
     renderDay();
   };
   el.querySelector(".delete-button")?.addEventListener("click", () => {
+    const label = editBuffer.title?.trim() || "this row";
+    if (!confirm(`Delete ${label}?`)) return;
     const sourceDate = editBuffer._sourceDate || date;
     removeRow(sourceDate, editingId);
     exitEdit();

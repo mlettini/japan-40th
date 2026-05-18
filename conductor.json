@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "run": "open \"$CONDUCTOR_WORKSPACE_PATH/index.html\""
+  }
+}
