@@ -4,7 +4,7 @@ const START_DATE = "2026-05-25";
 const END_DATE = "2026-06-10";
 
 // Clicks on these selectors don't collapse an expanded row.
-const COLLAPSE_IGNORE = ".row, .day-chip, .header-pill, .add-row";
+const COLLAPSE_IGNORE = ".row, .day-chip, .header-button, .add-row";
 
 const CATEGORIES = [
   { value: "", label: "None" },
@@ -24,6 +24,7 @@ let editingId = null;
 let editBuffer = null;
 let flashTimeout;
 let lastScrolledDate = null;
+let editFetchTargetId = null;
 
 function parseDate(date) {
   const [y, m, d] = date.split("-").map(Number);
@@ -175,7 +176,8 @@ function hideSetup() {
 }
 
 function wireSetup() {
-  document.querySelector("#setup-connect").onclick = async () => {
+  document.querySelector("#setup-form").onsubmit = async (e) => {
+    e.preventDefault();
     const binId = document.querySelector("#setup-bin-id").value.trim();
     const key = document.querySelector("#setup-master-key").value.trim();
     if (!binId || !key) {
@@ -190,8 +192,8 @@ function wireSetup() {
       setupTimeFormatToggle();
       setupReloadButton();
       routeAndRender();
-    } catch (e) {
-      showSetup("Couldn't connect: " + e.message);
+    } catch (err) {
+      showSetup("Couldn't connect: " + err.message);
     }
   };
 }
@@ -212,15 +214,29 @@ async function syncToRemote() {
 
 async function syncFromRemote(failMsg) {
   const { binId, key } = getCreds();
-  if (!binId || !key) return;
+  if (!binId || !key) return true;
   flashSaved("Syncing…");
   try {
     await adoptOrPush(binId, key);
     flashSaved("Synced");
     render();
+    return true;
   } catch (e) {
     handleSyncError(e, failMsg);
+    return false;
   }
+}
+
+// Flush any pending or in-flight save first — otherwise the pull would
+// overwrite local-only changes (e.g. day-note typing in the debounce window)
+// with stale remote data.
+async function pullLatest(failMsg) {
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+    await syncToRemote();
+  }
+  return syncFromRemote(failMsg);
 }
 
 // If the tab is closing within the 800ms debounce window, fire the pending
@@ -395,6 +411,10 @@ function renderRow(row, date) {
   const isExpanded = expandedId === row.id;
   if (isExpanded) el.classList.add("expanded");
 
+  const isLoading = editFetchTargetId === row.id;
+  const editBtn = isLoading
+    ? `<button type="button" class="button edit-button" disabled>Syncing…</button>`
+    : `<button type="button" class="button edit-button">Edit</button>`;
   const badge = row.category ? `<span class="cat-badge cat-${row.category}">${categoryLabel(row.category)}</span>` : "";
   el.innerHTML = `
     <div class="row-time">${formatTime(row.time, getTimeFormat())}</div>
@@ -402,12 +422,12 @@ function renderRow(row, date) {
       <div class="row-title">${badge}${escapeHtml(row.title || "(untitled)")}</div>
       ${row.description ? `<div class="row-desc">${escapeHtml(row.description)}</div>` : ""}
     </div>
-    ${isExpanded ? `<div class="row-actions"><button type="button" class="button edit-btn">Edit</button></div>` : ""}
+    ${isExpanded ? `<div class="row-actions">${editBtn}</div>` : ""}
   `;
 
   el.onclick = (e) => {
-    if (e.target.classList.contains("edit-btn")) {
-      enterEdit(row);
+    if (e.target.classList.contains("edit-button")) {
+      enterEdit(row, date);
       return;
     }
     if (isExpanded) return;
@@ -427,11 +447,31 @@ function renderEditingRow(date) {
   return el;
 }
 
-function enterEdit(row) {
-  editingId = row.id;
-  editBuffer = structuredClone(row);
-  expandedId = null;
+async function enterEdit(row, date) {
+  if (editFetchTargetId) return;
+  editFetchTargetId = row.id;
   renderDay();
+  try {
+    if (hasCreds()) {
+      // Pull latest before opening so the user's edits can't overwrite
+      // a newer remote version, and re-find the row in the (possibly
+      // replaced) state.
+      const ok = await pullLatest("Sync failed — edit canceled");
+      if (!ok) return;
+      const fresh = dayRows(date).find(r => r.id === row.id);
+      if (!fresh) {
+        flashSaved("Row no longer exists");
+        return;
+      }
+      row = fresh;
+    }
+    editingId = row.id;
+    editBuffer = structuredClone(row);
+    expandedId = null;
+  } finally {
+    editFetchTargetId = null;
+    renderDay();
+  }
 }
 
 function exitEdit() {
@@ -443,11 +483,11 @@ function renderEditForm(buf, isExisting) {
   const cat = buf.category || "";
   const hl = buf.highlight || "none";
   return `
-    <div class="form">
+    <form class="form">
       <label>Category
         <div class="cat-picker">
           ${CATEGORIES.map((c) => `
-            <button type="button" class="button cat-btn cat-${c.value || "none"}${cat === c.value ? " selected" : ""}" data-cat="${c.value}">${c.label}</button>
+            <button type="button" class="button cat-button cat-${c.value || "none"}${cat === c.value ? " selected" : ""}" data-cat="${c.value}">${c.label}</button>
           `).join("")}
         </div>
       </label>
@@ -463,16 +503,16 @@ function renderEditForm(buf, isExisting) {
       <label>Highlight
         <div class="hl-picker">
           ${["none", "green", "yellow", "red"].map((c) => `
-            <button type="button" class="hl-btn hl-${c}${hl === c ? " selected" : ""}" data-hl="${c}" aria-label="${c}"></button>
+            <button type="button" class="hl-button hl-${c}${hl === c ? " selected" : ""}" data-hl="${c}" aria-label="${c}"></button>
           `).join("")}
         </div>
       </label>
       <div class="form-actions">
-        ${isExisting ? `<button type="button" class="button delete-btn">Delete</button>` : ""}
-        <button type="button" class="button cancel-btn">Cancel</button>
-        <button type="button" class="button save-btn">Save</button>
+        ${isExisting ? `<button type="button" class="button delete-button">Delete</button>` : ""}
+        <button type="button" class="button cancel-button">Cancel</button>
+        <button type="submit" class="button primary-button">Save</button>
       </div>
-    </div>
+    </form>
   `;
 }
 
@@ -483,19 +523,20 @@ function wireEditForm(el, date) {
       editBuffer[field] = input.value;
     });
   });
-  el.querySelectorAll(".cat-btn").forEach((btn) => {
+  el.querySelectorAll(".cat-button").forEach((btn) => {
     btn.onclick = () => {
       editBuffer.category = btn.dataset.cat || null;
       renderDay();
     };
   });
-  el.querySelectorAll(".hl-btn").forEach((btn) => {
+  el.querySelectorAll(".hl-button").forEach((btn) => {
     btn.onclick = () => {
       editBuffer.highlight = btn.dataset.hl === "none" ? null : btn.dataset.hl;
       renderDay();
     };
   });
-  el.querySelector(".save-btn").onclick = () => {
+  el.querySelector(".form").onsubmit = (e) => {
+    e.preventDefault();
     const cleaned = structuredClone(editBuffer);
     if (!cleaned.category) delete cleaned.category;
     if (!cleaned.highlight) delete cleaned.highlight;
@@ -508,11 +549,11 @@ function wireEditForm(el, date) {
     expandedId = id;
     commit();
   };
-  el.querySelector(".cancel-btn").onclick = () => {
+  el.querySelector(".cancel-button").onclick = () => {
     exitEdit();
     renderDay();
   };
-  el.querySelector(".delete-btn")?.addEventListener("click", () => {
+  el.querySelector(".delete-button")?.addEventListener("click", () => {
     removeRow(date, editingId);
     exitEdit();
     commit();
@@ -537,7 +578,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (editingId) {
-    document.querySelector(".cancel-btn")?.click();
+    document.querySelector(".cancel-button")?.click();
   } else if (expandedId) {
     expandedId = null;
     renderDay();
@@ -568,15 +609,9 @@ function setupReloadButton() {
       flashSaved("Finish editing first");
       return;
     }
-    // Cancel any pending or in-flight save — otherwise it could race the pull
-    // and clobber remote with stale state right after we adopt it.
-    clearTimeout(syncTimer);
-    syncTimer = null;
-    if (syncController) syncController.abort();
-
     btn.disabled = true;
     try {
-      await syncFromRemote("Reload failed");
+      await pullLatest("Reload failed");
     } finally {
       btn.disabled = false;
     }
