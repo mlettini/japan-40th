@@ -13,7 +13,8 @@
     <h1>Japan 40th 🇯🇵</h1>
     <div class="title-bar-right">
       <span id="save-indicator">Saved</span>
-      <button type="button" id="time-format-toggle" aria-label="Toggle time format">24h</button>
+      <button type="button" class="button header-pill" id="time-format-toggle" aria-label="Toggle time format">24h</button>
+      <button type="button" class="button header-pill" id="reload-button" aria-label="Reload from remote">Reload</button>
     </div>
   </div>
   <nav id="day-strip" aria-label="Days"></nav>
@@ -40,16 +41,16 @@
 
     <label>
       Bin ID
-      <input type="text" id="setup-bin-id" placeholder="abc123def456..." autocomplete="off" autocapitalize="off" spellcheck="false">
+      <input type="text" class="input" id="setup-bin-id" placeholder="abc123def456..." autocomplete="off" autocapitalize="off" spellcheck="false">
     </label>
 
     <label>
       Master Key
-      <input type="password" id="setup-master-key" placeholder="$2a$..." autocomplete="off">
+      <input type="password" class="input" id="setup-master-key" placeholder="$2a$..." autocomplete="off">
     </label>
 
     <div id="setup-error"></div>
-    <button type="button" id="setup-connect">Connect</button>
+    <button type="button" class="button" id="setup-connect">Connect</button>
   </div>
 </div>
 
