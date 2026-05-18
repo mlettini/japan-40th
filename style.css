@@ -23,11 +23,9 @@
   --cat-dinner-bg: #ead4e0;
   --cat-dinner-bd: #b58aa8;
 
-  /* Shape */
   --radius: 0.5rem;
   --radius-sm: 0.3rem;
 
-  /* Typography */
   --text-sm: 0.9rem;
 }
 @media (prefers-color-scheme: dark) {
@@ -76,9 +74,39 @@ html, body {
 .button {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-radius: var(--radius);
   color: var(--text);
   cursor: pointer;
   font-family: inherit;
+  font-size: var(--text-sm);
+  padding: 0.6rem 0.8rem;
+
+  &:hover:not(:disabled) { border-color: var(--border-hover); }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
+
+.header-button {
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.2rem 0.6rem;
+}
+
+.primary-button {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--surface);
+  font-weight: 600;
+}
+
+.delete-button {
+  color: var(--accent);
+  margin-right: auto;
 }
 
 .input {
@@ -90,10 +118,23 @@ html, body {
   font-size: 1rem;
   height: min-content;
   padding: 0.6rem;
-  width: 100%;
 }
 
 textarea.input { min-height: 4.5rem; resize: vertical; }
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+
+  > label {
+    display: flex;
+    flex-direction: column;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    gap: 0.2rem;
+  }
+}
 
 
 
@@ -123,16 +164,6 @@ header {
   align-items: center;
   display: flex;
   gap: 0.3rem;
-}
-
-.header-pill {
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 0.2rem 0.6rem;
-
-  &:hover:not(:disabled) { border-color: var(--border-hover); }
-  &:disabled { cursor: default; opacity: 0.5; }
 }
 
 #save-indicator {
@@ -361,20 +392,6 @@ main {
 
 /* ROW ADD/EDIT FORM */
 
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-
-  > label {
-    display: flex;
-    flex-direction: column;
-    font-size: var(--text-sm);
-    font-weight: 600;
-    gap: 0.2rem;
-  }
-}
-
 .cat-picker,
 .hl-picker {
   display: flex;
@@ -382,7 +399,7 @@ main {
   gap: 0.5rem;
 }
 
-.cat-btn {
+.cat-button {
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   padding: 0.5rem;
@@ -394,7 +411,7 @@ main {
   &.cat-dinner { background: var(--cat-dinner-bg); border-color: var(--cat-dinner-bd); }
 }
 
-.hl-btn {
+.hl-button {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -419,8 +436,8 @@ main {
   &.hl-red { background: var(--hl-red-bg); border-color: var(--hl-red-bd); }
 }
 
-.cat-btn.selected,
-.hl-btn.selected {
+.cat-button.selected,
+.hl-button.selected {
   outline: 2px solid var(--text);
   outline-offset: -1px;
 }
@@ -433,37 +450,11 @@ main {
   margin-top: 0.2rem;
 }
 
-.save-btn,
-.cancel-btn,
-.delete-btn,
-.add-row,
-.edit-btn,
-#setup-connect {
-  border-radius: var(--radius);
-  font-size: var(--text-sm);
-  padding: 0.6rem 0.8rem;
-
-  &:hover { border-color: var(--border-hover); }
-}
-
-.save-btn,
-#setup-connect {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--surface);
-  font-weight: 600;
-}
-
-.delete-btn {
-  color: var(--accent);
-  margin-right: auto;
-}
-
 .add-row {
   background: transparent;
   border-style: dashed;
   color: var(--text-muted);
-  margin-top: 0.2rem;
+  margin-top: 0.5rem;
 }
 
 

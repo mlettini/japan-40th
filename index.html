@@ -13,8 +13,8 @@
     <h1>Japan 40th 🇯🇵</h1>
     <div class="title-bar-right">
       <span id="save-indicator">Saved</span>
-      <button type="button" class="button header-pill" id="time-format-toggle" aria-label="Toggle time format">24h</button>
-      <button type="button" class="button header-pill" id="reload-button" aria-label="Reload from remote">Reload</button>
+      <button type="button" class="button header-button" id="time-format-toggle" aria-label="Toggle time format">24h</button>
+      <button type="button" class="button header-button" id="reload-button" aria-label="Reload from remote">Reload</button>
     </div>
   </div>
   <nav id="day-strip" aria-label="Days"></nav>
@@ -26,7 +26,7 @@
 </main>
 
 <div id="setup-screen">
-  <div class="setup-card">
+  <form id="setup-form" class="setup-card">
     <h1>Set up sync</h1>
     <p class="setup-intro">Data lives in a private JSONbin bin so all your devices stay in sync. Paste your Bin ID + Master Key once per device — the same credentials work everywhere.</p>
 
@@ -50,8 +50,8 @@
     </label>
 
     <div id="setup-error"></div>
-    <button type="button" class="button" id="setup-connect">Connect</button>
-  </div>
+    <button type="submit" class="button primary-button">Connect</button>
+  </form>
 </div>
 
 <script src="app.js"></script>
