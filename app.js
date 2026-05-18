@@ -38,6 +38,17 @@ function toIsoDate(d) {
   return `${y}-${m}-${day}`;
 }
 
+function nowHHMM() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function stripContinuation(obj) {
+  delete obj._continuation;
+  delete obj._sourceDate;
+  delete obj._displayTime;
+}
+
 function generateDates(start, end) {
   const dates = [];
   const d = parseDate(start);
@@ -262,7 +273,7 @@ window.addEventListener("pagehide", flushPendingSync);
 window.resetSync = () => { clearCreds(); location.reload(); };
 
 function formatTime(time, format) {
-  if (!time) return "--:--";
+  if (!time) return `<span class="row-time-empty">—</span>`;
   const [hStr, mStr] = time.split(":");
   let h = parseInt(hStr, 10);
   if (format === "12h") {
@@ -300,11 +311,24 @@ function dayRows(date) {
 }
 
 function getRows(date) {
-  return dayRows(date).slice().sort((a, b) => {
-    const at = a.time || "99:99";
-    const bt = b.time || "99:99";
-    return at.localeCompare(bt);
-  });
+  const own = dayRows(date).slice();
+  const continuations = [];
+  for (const src in state.days) {
+    if (src >= date) continue;
+    for (const row of state.days[src]) {
+      if (row.category !== "lodging") continue;
+      if (!row.endDate || row.endDate < date) continue;
+      continuations.push({
+        ...row,
+        _continuation: true,
+        _sourceDate: src,
+        _displayTime: row.endDate === date ? (row.endTime || "") : "",
+      });
+    }
+  }
+  return [...own, ...continuations].sort((a, b) =>
+    ((a._displayTime ?? a.time) || "").localeCompare((b._displayTime ?? b.time) || "")
+  );
 }
 
 function removeRow(date, id) {
@@ -363,11 +387,12 @@ function renderDay() {
 
   const list = document.querySelector("#rows");
   list.innerHTML = "";
-  for (const row of getRows(date)) {
+  const rows = getRows(date);
+  for (const row of rows) {
     list.appendChild(renderRow(row, date));
   }
   // Editing a not-yet-saved new row: it isn't in state.days, so append its form at the end.
-  if (editingId && editBuffer && !dayRows(date).some(r => r.id === editingId)) {
+  if (editingId && editBuffer && !rows.some(r => r.id === editingId)) {
     list.appendChild(renderEditingRow(date));
   }
   const addBtn = document.createElement("button");
@@ -424,7 +449,7 @@ function renderRow(row, date) {
     </div>
   ` : "";
   el.innerHTML = `
-    <div class="row-time">${formatTime(row.time, getTimeFormat())}</div>
+    <div class="row-time">${formatTime(row._displayTime ?? row.time, getTimeFormat())}</div>
     <div class="row-info">
       <div class="row-title">${badge}${escapeHtml(row.title || "(untitled)")}</div>
       ${row.description ? `<div class="row-desc">${escapeHtml(row.description)}</div>` : ""}
@@ -466,6 +491,7 @@ function renderCopyMenu(row) {
 function copyRowToDate(row, toDate) {
   const clone = structuredClone(row);
   clone.id = newId();
+  stripContinuation(clone);
   if (!state.days[toDate]) state.days[toDate] = [];
   state.days[toDate].push(clone);
   document.getElementById(copyMenuId(row))?.hidePopover();
@@ -478,14 +504,16 @@ function renderEditingRow(date) {
   const el = document.createElement("div");
   el.className = "row editing fmt-" + getTimeFormat();
   el.dataset.id = editingId;
-  el.innerHTML = renderEditForm(editBuffer, dayRows(date).some(r => r.id === editingId));
+  const isExisting = !!(editBuffer._sourceDate && state.days[editBuffer._sourceDate]?.some(r => r.id === editingId));
+  el.innerHTML = renderEditForm(editBuffer, isExisting);
   wireEditForm(el, date);
   return el;
 }
 
-async function enterEdit(row, date) {
+async function enterEdit(row, viewDate) {
   if (editFetchTargetId) return;
   editFetchTargetId = row.id;
+  const sourceDate = row._sourceDate || viewDate;
   renderDay();
   try {
     if (hasCreds()) {
@@ -494,7 +522,7 @@ async function enterEdit(row, date) {
       // replaced) state.
       const ok = await pullLatest("Sync failed — edit canceled");
       if (!ok) return;
-      const fresh = dayRows(date).find(r => r.id === row.id);
+      const fresh = dayRows(sourceDate).find(r => r.id === row.id);
       if (!fresh) {
         flashSaved("Row no longer exists");
         return;
@@ -503,6 +531,9 @@ async function enterEdit(row, date) {
     }
     editingId = row.id;
     editBuffer = structuredClone(row);
+    stripContinuation(editBuffer);
+    editBuffer._sourceDate = sourceDate;
+    editBuffer._startDate = sourceDate;
     expandedId = null;
   } finally {
     editFetchTargetId = null;
@@ -518,6 +549,10 @@ function exitEdit() {
 function renderEditForm(buf, isExisting) {
   const cat = buf.category || "";
   const hl = buf.highlight || "none";
+  const startDate = buf._startDate || "";
+  const startDt = startDate && buf.time ? `${startDate}T${buf.time}` : "";
+  const endDt = buf.endDate && buf.endTime ? `${buf.endDate}T${buf.endTime}` : "";
+  const isLodging = cat === "lodging";
   return `
     <form class="form">
       <label>Category
@@ -527,9 +562,14 @@ function renderEditForm(buf, isExisting) {
           `).join("")}
         </div>
       </label>
-      <label>Time
-        <input class="input" type="time" data-field="time" value="${buf.time || ""}">
+      <label>${isLodging ? "Check-in" : "Time"}
+        <input class="input" type="datetime-local" data-field="start" value="${startDt}">
       </label>
+      ${isLodging ? `
+        <label>Check-out
+          <input class="input" type="datetime-local" data-field="end" value="${endDt}"${startDt ? ` min="${startDt}"` : ""}>
+        </label>
+      ` : ""}
       <label>Title
         <input class="input" type="text" data-field="title" value="${escapeHtml(buf.title || "")}" placeholder="What’s happening?">
       </label>
@@ -555,42 +595,94 @@ function renderEditForm(buf, isExisting) {
 function wireEditForm(el, date) {
   el.querySelectorAll("[data-field]").forEach((input) => {
     const field = input.dataset.field;
-    input.addEventListener("input", () => {
-      editBuffer[field] = input.value;
-    });
+    if (field === "start") {
+      input.addEventListener("input", () => {
+        const v = input.value;
+        if (!v) {
+          editBuffer.time = "";
+          if (editBuffer._sourceDate) editBuffer._startDate = editBuffer._sourceDate;
+          return;
+        }
+        const [d, t] = v.split("T");
+        editBuffer._startDate = d;
+        editBuffer.time = t;
+      });
+    } else if (field === "end") {
+      input.addEventListener("input", () => {
+        const v = input.value;
+        if (!v) {
+          delete editBuffer.endDate;
+          delete editBuffer.endTime;
+          return;
+        }
+        const [d, t] = v.split("T");
+        editBuffer.endDate = d;
+        editBuffer.endTime = t;
+      });
+    } else {
+      input.addEventListener("input", () => {
+        editBuffer[field] = input.value;
+      });
+    }
   });
   el.querySelectorAll(".cat-button").forEach((btn) => {
     btn.onclick = () => {
-      editBuffer.category = btn.dataset.cat || null;
+      const next = btn.dataset.cat || null;
+      if (editBuffer.category === next) return;
+      editBuffer.category = next;
+      if (next === "lodging" && !editBuffer.endDate) {
+        editBuffer.endDate = editBuffer._startDate || editBuffer._sourceDate;
+        editBuffer.endTime = nowHHMM();
+      }
       renderDay();
     };
   });
   el.querySelectorAll(".hl-button").forEach((btn) => {
     btn.onclick = () => {
-      editBuffer.highlight = btn.dataset.hl === "none" ? null : btn.dataset.hl;
+      const next = btn.dataset.hl === "none" ? null : btn.dataset.hl;
+      if (editBuffer.highlight === next) return;
+      editBuffer.highlight = next;
       renderDay();
     };
   });
   el.querySelector(".form").onsubmit = (e) => {
     e.preventDefault();
     const cleaned = structuredClone(editBuffer);
+    const sourceDate = cleaned._sourceDate || date;
+    const newDate = cleaned._startDate || sourceDate;
+    delete cleaned._sourceDate;
+    delete cleaned._startDate;
     if (!cleaned.category) delete cleaned.category;
     if (!cleaned.highlight) delete cleaned.highlight;
-    if (!state.days[date]) state.days[date] = [];
-    const idx = state.days[date].findIndex(r => r.id === editingId);
-    if (idx >= 0) state.days[date][idx] = cleaned;
-    else state.days[date].push(cleaned);
+    if (cleaned.category !== "lodging") {
+      delete cleaned.endDate;
+      delete cleaned.endTime;
+    }
+    if (state.days[sourceDate]) {
+      state.days[sourceDate] = state.days[sourceDate].filter(r => r.id !== editingId);
+    }
+    if (!state.days[newDate]) state.days[newDate] = [];
+    const idx = state.days[newDate].findIndex(r => r.id === editingId);
+    if (idx >= 0) state.days[newDate][idx] = cleaned;
+    else state.days[newDate].push(cleaned);
     const id = editingId;
     exitEdit();
-    expandedId = id;
-    commit();
+    if (newDate !== sourceDate) {
+      // Date was changed — follow the row to its new home.
+      location.hash = "#/" + newDate;
+      saveState();
+    } else {
+      expandedId = id;
+      commit();
+    }
   };
   el.querySelector(".cancel-button").onclick = () => {
     exitEdit();
     renderDay();
   };
   el.querySelector(".delete-button")?.addEventListener("click", () => {
-    removeRow(date, editingId);
+    const sourceDate = editBuffer._sourceDate || date;
+    removeRow(sourceDate, editingId);
     exitEdit();
     commit();
   });
@@ -601,7 +693,11 @@ const newId = () => Math.random().toString(36).slice(2, 10);
 function addRow(date) {
   const id = newId();
   editingId = id;
-  editBuffer = { id, time: "", title: "", description: "", category: null, highlight: null };
+  editBuffer = {
+    id, time: nowHHMM(),
+    title: "", description: "", category: null, highlight: null,
+    _sourceDate: date, _startDate: date,
+  };
   expandedId = null;
   renderDay();
 }
