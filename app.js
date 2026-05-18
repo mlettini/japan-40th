@@ -416,18 +416,30 @@ function renderRow(row, date) {
     ? `<button type="button" class="button edit-button" disabled>Syncing…</button>`
     : `<button type="button" class="button edit-button">Edit</button>`;
   const badge = row.category ? `<span class="cat-badge cat-${row.category}">${categoryLabel(row.category)}</span>` : "";
+  const actions = isExpanded ? `
+    <div class="row-actions">
+      <button type="button" class="button copy-button" popovertarget="${copyMenuId(row)}">Copy</button>
+      ${editBtn}
+      ${renderCopyMenu(row)}
+    </div>
+  ` : "";
   el.innerHTML = `
     <div class="row-time">${formatTime(row.time, getTimeFormat())}</div>
     <div class="row-info">
       <div class="row-title">${badge}${escapeHtml(row.title || "(untitled)")}</div>
       ${row.description ? `<div class="row-desc">${escapeHtml(row.description)}</div>` : ""}
     </div>
-    ${isExpanded ? `<div class="row-actions">${editBtn}</div>` : ""}
+    ${actions}
   `;
 
   el.onclick = (e) => {
     if (e.target.classList.contains("edit-button")) {
       enterEdit(row, date);
+      return;
+    }
+    const copyTarget = e.target.closest(".copy-menu-item");
+    if (copyTarget) {
+      copyRowToDate(row, copyTarget.dataset.date);
       return;
     }
     if (isExpanded) return;
@@ -436,6 +448,30 @@ function renderRow(row, date) {
   };
 
   return el;
+}
+
+const copyMenuId = (row) => `copy-menu-${row.id}`;
+
+function renderCopyMenu(row) {
+  const items = DATES.map(d => {
+    const { dow, day, mon } = formatChip(d);
+    return `<button type="button" class="copy-menu-item" data-date="${d}">
+      <span class="copy-menu-dow">${dow}</span>
+      <span class="copy-menu-day">${mon} ${day}</span>
+    </button>`;
+  }).join("");
+  return `<div class="copy-menu" id="${copyMenuId(row)}" popover="auto" role="menu">${items}</div>`;
+}
+
+function copyRowToDate(row, toDate) {
+  const clone = structuredClone(row);
+  clone.id = newId();
+  if (!state.days[toDate]) state.days[toDate] = [];
+  state.days[toDate].push(clone);
+  document.getElementById(copyMenuId(row))?.hidePopover();
+  commit();
+  const { mon, day } = formatChip(toDate);
+  flashSaved(`Copied to ${mon} ${day}`);
 }
 
 function renderEditingRow(date) {
@@ -560,8 +596,10 @@ function wireEditForm(el, date) {
   });
 }
 
+const newId = () => Math.random().toString(36).slice(2, 10);
+
 function addRow(date) {
-  const id = Math.random().toString(36).slice(2, 10);
+  const id = newId();
   editingId = id;
   editBuffer = { id, time: "", title: "", description: "", category: null, highlight: null };
   expandedId = null;
@@ -577,6 +615,8 @@ document.addEventListener("click", (e) => {
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+  // Browser handles Escape for open popovers (light-dismiss); don't also collapse the row.
+  if (document.querySelector(":popover-open")) return;
   if (editingId) {
     document.querySelector(".cancel-button")?.click();
   } else if (expandedId) {
