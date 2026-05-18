@@ -56,6 +56,7 @@
 
 * {
   box-sizing: border-box;
+  font-size: inherit;
   margin: 0;
   padding: 0;
 }
@@ -66,24 +67,33 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 16px;
   line-height: 1.5;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
 }
 
-/* Shared input base — overridden per-context below */
-input[type="text"],
-input[type="time"],
-input[type="password"],
-textarea {
+/* Shared bases — overridden per-variant below */
+
+.button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.input {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
   font-family: inherit;
   font-size: 1rem;
+  height: min-content;
   padding: 0.6rem;
   width: 100%;
 }
 
-textarea { min-height: 4.5rem; resize: vertical; }
+textarea.input { min-height: 4.5rem; resize: vertical; }
 
 
 
@@ -102,7 +112,7 @@ header {
   align-items: center;
   display: flex;
   justify-content: space-between;
-  padding: 0.8rem 1rem 0.5rem;
+  padding: 0.8rem 1rem 0;
   h1 {
     font-size: 1.2rem;
     font-weight: 600;
@@ -112,26 +122,23 @@ header {
 .title-bar-right {
   align-items: center;
   display: flex;
-  gap: 0.5rem;
+  gap: 0.3rem;
 }
 
-#time-format-toggle {
-  background: var(--surface);
-  border: 1px solid var(--border);
+.header-pill {
   border-radius: 999px;
-  color: var(--text);
-  cursor: pointer;
-  font-family: inherit;
   font-size: 0.8rem;
   font-weight: 600;
   padding: 0.2rem 0.6rem;
 
-  &:hover { border-color: var(--border-hover); }
+  &:hover:not(:disabled) { border-color: var(--border-hover); }
+  &:disabled { cursor: default; opacity: 0.5; }
 }
 
 #save-indicator {
   color: var(--text-muted);
   font-size: 0.8rem;
+  margin-right: 0.3rem;
   opacity: 0;
   transition: opacity 0.2s;
 
@@ -145,24 +152,21 @@ header {
 #day-strip {
   display: flex;
   gap: 0.5rem;
+  margin-inline: auto;
+  max-width: max-content;
   -webkit-overflow-scrolling: touch;
   overflow-x: auto;
-  padding: 0.2rem 0.8rem 0.8rem;
+  padding: 0.8rem;
 
   &::-webkit-scrollbar { display: none; }
 }
 
 .day-chip {
   align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--border);
   border-radius: var(--radius);
-  color: var(--text);
-  cursor: pointer;
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  font-family: inherit;
   min-width: 3.2rem;
   padding: 0.2rem 0.5rem;
   scroll-snap-align: center;
@@ -215,12 +219,14 @@ main {
 .day-note {
   background: transparent;
   border: none;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   display: block;
   font-family: inherit;
   font-size: 1rem;
   line-height: 1.4;
   min-height: 1.4rem;
+  outline-offset: 3px;
   overflow: hidden;
   padding: 0;
   resize: none;
@@ -289,7 +295,10 @@ main {
   }
 }
 
-.row-time { text-align: right; }
+.row-time {
+  font-weight: 500;
+  text-align: right;
+}
 
 .row-info { overflow: hidden; }
 
@@ -314,7 +323,7 @@ main {
   font-weight: 500;
   margin-right: 0.5rem;
   margin-top: -3px;
-  padding: 0 0.2rem;
+  padding: 2px 5px;
   text-transform: uppercase;
   vertical-align: middle;
 
@@ -343,8 +352,9 @@ main {
 
 .row-actions {
   display: flex;
+  grid-column: 1 / -1;
   justify-content: flex-end;
-  margin-top: 0.5rem;
+  margin-top: 0.2rem;
 }
 
 
@@ -359,6 +369,7 @@ main {
   > label {
     display: flex;
     flex-direction: column;
+    font-size: var(--text-sm);
     font-weight: 600;
     gap: 0.2rem;
   }
@@ -372,16 +383,11 @@ main {
 }
 
 .cat-btn {
-  background: var(--surface);
-  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  color: var(--text);
-  cursor: pointer;
-  font-family: inherit;
   font-size: var(--text-sm);
   padding: 0.5rem;
 
-  &.cat-transportation { background: transparent; border-style: dashed; }
+  &.cat-transportation { background: var(--bg); border-style: dashed; color: var(--text-muted); }
   &.cat-lodging { background: var(--cat-lodging-bg); border-color: var(--cat-lodging-bd); }
   &.cat-activity { background: var(--cat-activity-bg); border-color: var(--cat-activity-bd); }
   &.cat-lunch { background: var(--cat-lunch-bg); border-color: var(--cat-lunch-bd); }
@@ -431,19 +437,17 @@ main {
 .cancel-btn,
 .delete-btn,
 .add-row,
-.edit-btn {
-  background: var(--surface);
-  border: 1px solid var(--border);
+.edit-btn,
+#setup-connect {
   border-radius: var(--radius);
-  color: var(--text);
-  cursor: pointer;
-  font-family: inherit;
-  padding: 0.5rem 1rem;
+  font-size: var(--text-sm);
+  padding: 0.6rem 0.8rem;
 
   &:hover { border-color: var(--border-hover); }
 }
 
-.save-btn {
+.save-btn,
+#setup-connect {
   background: var(--text);
   border-color: var(--text);
   color: var(--surface);
@@ -456,11 +460,10 @@ main {
 }
 
 .add-row {
+  background: transparent;
   border-style: dashed;
   color: var(--text-muted);
   margin-top: 0.2rem;
-  padding: 1rem;
-  width: 100%;
 }
 
 
@@ -498,14 +501,6 @@ body.needs-setup > main { display: none; }
     font-weight: 600;
   }
 
-  label {
-    display: flex;
-    flex-direction: column;
-    font-size: var(--text-sm);
-    font-weight: 600;
-    gap: 0.2rem;
-  }
-
   input {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
@@ -535,18 +530,6 @@ body.needs-setup > main { display: none; }
   }
 
   a { color: var(--text); }
-}
-
-#setup-connect {
-  background: var(--text);
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--surface);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: var(--text-sm);
-  font-weight: 600;
-  padding: 0.8rem;
 }
 
 #setup-error {

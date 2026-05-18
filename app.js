@@ -3,6 +3,9 @@ const TIME_FORMAT_KEY = "japan-40th-time-format";
 const START_DATE = "2026-05-25";
 const END_DATE = "2026-06-10";
 
+// Clicks on these selectors don't collapse an expanded row.
+const COLLAPSE_IGNORE = ".row, .day-chip, .header-pill, .add-row";
+
 const CATEGORIES = [
   { value: "", label: "None" },
   { value: "transportation", label: "Transport" },
@@ -185,6 +188,7 @@ function wireSetup() {
       localStorage.setItem(MASTER_KEY_KEY, key);
       hideSetup();
       setupTimeFormatToggle();
+      setupReloadButton();
       routeAndRender();
     } catch (e) {
       showSetup("Couldn't connect: " + e.message);
@@ -203,6 +207,19 @@ async function syncToRemote() {
     flashSaved("Synced");
   } catch (e) {
     handleSyncError(e, "Sync failed");
+  }
+}
+
+async function syncFromRemote(failMsg) {
+  const { binId, key } = getCreds();
+  if (!binId || !key) return;
+  flashSaved("Syncing…");
+  try {
+    await adoptOrPush(binId, key);
+    flashSaved("Synced");
+    render();
+  } catch (e) {
+    handleSyncError(e, failMsg);
   }
 }
 
@@ -230,15 +247,15 @@ window.resetSync = () => { clearCreds(); location.reload(); };
 
 function formatTime(time, format) {
   if (!time) return "--:--";
+  const [hStr, mStr] = time.split(":");
+  let h = parseInt(hStr, 10);
   if (format === "12h") {
-    const [hStr, mStr] = time.split(":");
-    let h = parseInt(hStr, 10);
     const period = h >= 12 ? "pm" : "am";
     h = h % 12;
     if (h === 0) h = 12;
     return `${h}:${mStr}${period}`;
   }
-  return time;
+  return `${h}:${mStr}`;
 }
 
 function autoResize(textarea) {
@@ -307,7 +324,7 @@ function renderDayStrip() {
   for (const date of DATES) {
     const { dow, day, mon } = formatChip(date);
     const btn = document.createElement("button");
-    btn.className = "day-chip" + (date === today ? " active" : "");
+    btn.className = "button day-chip" + (date === today ? " active" : "");
     btn.innerHTML = `
       <span class="day-chip-dow">${dow}</span>
       <span class="day-chip-day">${day}</span>
@@ -338,8 +355,8 @@ function renderDay() {
     list.appendChild(renderEditingRow(date));
   }
   const addBtn = document.createElement("button");
-  addBtn.className = "add-row";
-  addBtn.textContent = "+ Add row";
+  addBtn.className = "button add-row";
+  addBtn.textContent = "＋ Add row";
   addBtn.onclick = () => addRow(date);
   list.appendChild(addBtn);
 }
@@ -384,8 +401,8 @@ function renderRow(row, date) {
     <div class="row-info">
       <div class="row-title">${badge}${escapeHtml(row.title || "(untitled)")}</div>
       ${row.description ? `<div class="row-desc">${escapeHtml(row.description)}</div>` : ""}
-      ${isExpanded ? `<div class="row-actions"><button type="button" class="edit-btn">Edit</button></div>` : ""}
     </div>
+    ${isExpanded ? `<div class="row-actions"><button type="button" class="button edit-btn">Edit</button></div>` : ""}
   `;
 
   el.onclick = (e) => {
@@ -427,21 +444,21 @@ function renderEditForm(buf, isExisting) {
   const hl = buf.highlight || "none";
   return `
     <div class="form">
-      <label>Time
-        <input type="time" data-field="time" value="${buf.time || ""}">
-      </label>
-      <label>Title
-        <input type="text" data-field="title" value="${escapeHtml(buf.title || "")}" placeholder="What’s happening?">
-      </label>
-      <label>Description
-        <textarea data-field="description" rows="3" placeholder="Details, reservation #, notes…">${escapeHtml(buf.description || "")}</textarea>
-      </label>
       <label>Category
         <div class="cat-picker">
           ${CATEGORIES.map((c) => `
-            <button type="button" class="cat-btn cat-${c.value || "none"}${cat === c.value ? " selected" : ""}" data-cat="${c.value}">${c.label}</button>
+            <button type="button" class="button cat-btn cat-${c.value || "none"}${cat === c.value ? " selected" : ""}" data-cat="${c.value}">${c.label}</button>
           `).join("")}
         </div>
+      </label>
+      <label>Time
+        <input class="input" type="time" data-field="time" value="${buf.time || ""}">
+      </label>
+      <label>Title
+        <input class="input" type="text" data-field="title" value="${escapeHtml(buf.title || "")}" placeholder="What’s happening?">
+      </label>
+      <label>Description
+        <textarea class="input" data-field="description" rows="3" placeholder="Details, reservation #, notes…">${escapeHtml(buf.description || "")}</textarea>
       </label>
       <label>Highlight
         <div class="hl-picker">
@@ -451,9 +468,9 @@ function renderEditForm(buf, isExisting) {
         </div>
       </label>
       <div class="form-actions">
-        ${isExisting ? `<button type="button" class="delete-btn">Delete</button>` : ""}
-        <button type="button" class="cancel-btn">Cancel</button>
-        <button type="button" class="save-btn">Save</button>
+        ${isExisting ? `<button type="button" class="button delete-btn">Delete</button>` : ""}
+        <button type="button" class="button cancel-btn">Cancel</button>
+        <button type="button" class="button save-btn">Save</button>
       </div>
     </div>
   `;
@@ -511,7 +528,7 @@ function addRow(date) {
 }
 
 document.addEventListener("click", (e) => {
-  if (e.target.closest(".row, .day-chip, #time-format-toggle, .add-row")) return;
+  if (e.target.closest(COLLAPSE_IGNORE)) return;
   if (expandedId === null) return;
   expandedId = null;
   renderDay();
@@ -544,6 +561,28 @@ function setupTimeFormatToggle() {
   sync();
 }
 
+function setupReloadButton() {
+  const btn = document.querySelector("#reload-button");
+  btn.onclick = async () => {
+    if (editingId) {
+      flashSaved("Finish editing first");
+      return;
+    }
+    // Cancel any pending or in-flight save — otherwise it could race the pull
+    // and clobber remote with stale state right after we adopt it.
+    clearTimeout(syncTimer);
+    syncTimer = null;
+    if (syncController) syncController.abort();
+
+    btn.disabled = true;
+    try {
+      await syncFromRemote("Reload failed");
+    } finally {
+      btn.disabled = false;
+    }
+  };
+}
+
 function routeAndRender() {
   const initialHash = location.hash.slice(2);
   if (DATES.includes(initialHash)) {
@@ -561,20 +600,9 @@ function routeAndRender() {
 
 async function initApp() {
   setupTimeFormatToggle();
+  setupReloadButton();
   routeAndRender(); // render cached state immediately so slow networks don't blank the screen
-
-  // JSONbin is canonical; refresh from remote in the background
-  const { binId, key } = getCreds();
-  if (!binId || !key) return;
-
-  flashSaved("Syncing…");
-  try {
-    await adoptOrPush(binId, key);
-    flashSaved("Synced");
-    render();
-  } catch (e) {
-    if (handleSyncError(e, "Offline — using cached data")) return;
-  }
+  await syncFromRemote("Offline — using cached data");
 }
 
 wireSetup();
