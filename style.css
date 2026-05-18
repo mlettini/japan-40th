@@ -5,6 +5,7 @@
   --text-muted: color-mix(in srgb, var(--text), transparent 35%);
   --border: color-mix(in srgb, var(--text), transparent 86%);
   --border-hover: color-mix(in srgb, var(--text), transparent 65%);
+  --shadow: color-mix(in srgb, #1f1f1d, transparent 85%);
   --accent: #c8493b;
 
   --hl-green-bg: #e3f5e1;
@@ -33,6 +34,7 @@
     --bg: #1a1a1a;
     --surface: #252525;
     --text: #ececec;
+    --shadow: color-mix(in srgb, #000, transparent 85%);
 
     --hl-green-bg: #2c4a2d;
     --hl-green-bd: #4d7a51;
@@ -68,8 +70,6 @@ html, body {
   -webkit-text-size-adjust: none;
   text-size-adjust: none;
 }
-
-/* Shared bases — overridden per-variant below */
 
 .button {
   background: var(--surface);
@@ -164,6 +164,8 @@ header {
   align-items: center;
   display: flex;
   gap: 0.3rem;
+  margin-left: auto;
+  text-align: right;
 }
 
 #save-indicator {
@@ -383,9 +385,61 @@ main {
 
 .row-actions {
   display: flex;
+  gap: 0.5rem;
   grid-column: 1 / -1;
   justify-content: flex-end;
   margin-top: 0.2rem;
+}
+
+/* Popover defaults centre in the viewport; anchor() resolves to the
+   popovertarget invoker (the Copy button). */
+.copy-menu {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px var(--shadow);
+  inset: auto;
+  margin: 0;
+  max-height: 16rem;
+  min-width: 9rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.3rem;
+  position-try-fallbacks: flip-block;
+  right: anchor(right);
+  top: calc(anchor(bottom) + 0.4rem);
+
+  @media (prefers-color-scheme: light) {
+    background-clip: padding-box;
+  }
+}
+
+.copy-menu-item {
+  align-items: baseline;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  width: 100%;
+
+  &:hover { background: var(--bg); }
+}
+
+.copy-menu-dow {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  width: 2.5rem;
+}
+
+.copy-menu-day {
+  font-weight: 500;
 }
 
 
