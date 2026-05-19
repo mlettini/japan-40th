@@ -958,10 +958,19 @@ function routeAndRender() {
   // hashchange listener will render
 }
 
+function setupOfflineBanner() {
+  const banner = document.querySelector("#offline-banner");
+  const sync = () => { banner.hidden = navigator.onLine; };
+  window.addEventListener("online", sync);
+  window.addEventListener("offline", sync);
+  sync();
+}
+
 async function initApp() {
   setupTimeFormatToggle();
   setupViewToggle();
   setupReloadButton();
+  setupOfflineBanner();
   routeAndRender(); // render cached state immediately so slow networks don't blank the screen
   await syncFromRemote("Offline — using cached data");
 }
