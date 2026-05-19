@@ -15,6 +15,8 @@ const CATEGORIES = [
   { value: "dinner", label: "Dinner" },
 ];
 
+const HIGHLIGHTS = ["green", "yellow", "red"];
+
 const SAMPLE_DATA = { days: {} };
 
 const DATES = generateDates(START_DATE, END_DATE);
@@ -25,6 +27,10 @@ let editBuffer = null;
 let flashTimeout;
 let lastScrolledDate = null;
 let editFetchTargetId = null;
+let highlightFilter = null;
+// Lets a click in the category view jump to a day with that row already
+// expanded — without it, the hashchange listener would clear expandedId.
+let pendingExpandId = null;
 
 function parseDate(date) {
   const [y, m, d] = date.split("-").map(Number);
@@ -92,7 +98,7 @@ function saveState() {
 
 function commit() {
   saveState();
-  renderDay();
+  rerender();
 }
 
 function flashSaved(msg = "Saved") {
@@ -201,6 +207,7 @@ function wireSetup() {
       localStorage.setItem(MASTER_KEY_KEY, key);
       hideSetup();
       setupTimeFormatToggle();
+      setupViewToggle();
       setupReloadButton();
       routeAndRender();
     } catch (err) {
@@ -306,6 +313,10 @@ function currentDate() {
   return DATES.includes(hash) ? hash : DATES[0];
 }
 
+function isCategoryView() {
+  return location.hash === "#/all";
+}
+
 function dayRows(date) {
   return state.days[date] || [];
 }
@@ -353,8 +364,174 @@ function formatChip(date) {
 }
 
 function render() {
-  renderDayStrip();
-  renderDay();
+  const inCat = isCategoryView();
+  document.querySelector("#day-view").hidden = inCat;
+  document.querySelector("#category-view").hidden = !inCat;
+  document.querySelector("#day-strip").hidden = inCat;
+  document.querySelector("#view-toggle").textContent = inCat ? "Category" : "Daily";
+  if (inCat) {
+    renderCategoryView();
+  } else {
+    renderDayStrip();
+    renderDay();
+  }
+}
+
+// Re-renders just the active view's row list — skips the day-strip and
+// view-toggle update, which never change on row-only mutations.
+function rerender() {
+  if (isCategoryView()) renderCategoryView();
+  else renderDay();
+}
+
+function badgeHtml(category) {
+  if (!category) return "";
+  return `<span class="cat-badge cat-${category}">${categoryLabel(category)}</span>`;
+}
+
+function descHtml(text, isExpanded) {
+  if (!text) return "";
+  const inner = isExpanded
+    ? text
+    : text.split(/\r?\n/).map(s => s.trim()).filter(Boolean).join(", ");
+  return `<div class="row-desc">${escapeHtml(inner)}</div>`;
+}
+
+function actionsHtml(row, leading = "") {
+  const editBtn = editFetchTargetId === row.id
+    ? `<button type="button" class="button edit-button" disabled>Syncing…</button>`
+    : `<button type="button" class="button edit-button">Edit</button>`;
+  return `
+    <div class="row-actions">
+      ${leading}
+      <button type="button" class="button copy-button" popovertarget="${copyMenuId(row)}">Copy</button>
+      ${editBtn}
+      ${renderCopyMenu(row)}
+    </div>
+  `;
+}
+
+function chipLabel(date) {
+  const { dow, mon, day } = formatChip(date);
+  return `${dow} ${mon} ${day}`;
+}
+
+function renderCategoryView() {
+  renderHighlightFilter();
+  renderCategoryList();
+}
+
+function renderHighlightFilter() {
+  const bar = document.querySelector("#hl-filter-bar");
+  bar.innerHTML = "";
+  const options = [{ value: null, label: "All", cls: "hl-all" }];
+  for (const hl of HIGHLIGHTS) {
+    options.push({ value: hl, label: hl[0].toUpperCase() + hl.slice(1), cls: `hl-${hl}` });
+  }
+  for (const opt of options) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `button hl-filter ${opt.cls}` + (highlightFilter === opt.value ? " selected" : "");
+    btn.textContent = opt.label;
+    btn.onclick = () => {
+      if (highlightFilter === opt.value) return;
+      highlightFilter = opt.value;
+      renderCategoryView();
+    };
+    bar.appendChild(btn);
+  }
+}
+
+function renderCategoryList() {
+  const list = document.querySelector("#category-list");
+  list.innerHTML = "";
+
+  const buckets = new Map();
+  for (const c of CATEGORIES) if (c.value) buckets.set(c.value, []);
+  buckets.set("", []);
+
+  for (const date in state.days) {
+    for (const row of state.days[date]) {
+      if (highlightFilter && row.highlight !== highlightFilter) continue;
+      buckets.get(row.category || "").push({ row, date });
+    }
+  }
+
+  let hasAny = false;
+  for (const [cat, items] of buckets) {
+    if (!items.length) continue;
+    hasAny = true;
+    items.sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return (a.row.time || "").localeCompare(b.row.time || "");
+    });
+    const section = document.createElement("section");
+    section.className = "cat-section" + (cat ? ` cat-${cat}` : "");
+    const label = cat ? categoryLabel(cat) : "Uncategorized";
+    section.innerHTML = `<h3 class="cat-heading">${escapeHtml(label)} <span class="cat-count">${items.length}</span></h3>`;
+    const rowsEl = document.createElement("div");
+    rowsEl.className = "cat-rows";
+    for (const { row, date } of items) rowsEl.appendChild(renderCategoryRow(row, date));
+    section.appendChild(rowsEl);
+    list.appendChild(section);
+  }
+
+  if (!hasAny) {
+    const empty = document.createElement("p");
+    empty.className = "cat-empty";
+    empty.textContent = highlightFilter
+      ? `No ${highlightFilter} rows yet.`
+      : "No rows yet.";
+    list.appendChild(empty);
+  }
+}
+
+function renderCategoryRow(row, date) {
+  if (editingId === row.id) return renderEditingRow(date);
+
+  const el = document.createElement("div");
+  el.className = "row cat-row fmt-" + getTimeFormat();
+  if (row.category) el.classList.add("cat-" + row.category);
+  if (row.highlight) el.classList.add("hl-" + row.highlight);
+  el.dataset.id = row.id;
+
+  const isExpanded = expandedId === row.id;
+  if (isExpanded) el.classList.add("expanded");
+
+  const time = row.time ? formatTime(row.time, getTimeFormat()) : "";
+  const dateLabel = chipLabel(date) + (time ? ` · ${time}` : "");
+  const jumpBtn = `<button type="button" class="button jump-button">Go to day</button>`;
+
+  el.innerHTML = `
+    <div class="row-info">
+      <div class="cat-row-date">${dateLabel}</div>
+      <div class="row-title">${badgeHtml(row.category)}${escapeHtml(row.title || "(untitled)")}</div>
+      ${descHtml(row.description, isExpanded)}
+    </div>
+    ${isExpanded ? actionsHtml(row, jumpBtn) : ""}
+  `;
+
+  el.onclick = (e) => {
+    if (e.target.classList.contains("edit-button")) {
+      enterEdit(row, date);
+      return;
+    }
+    if (e.target.classList.contains("jump-button")) {
+      pendingExpandId = row.id;
+      location.hash = "#/" + date;
+      return;
+    }
+    const copyTarget = e.target.closest(".copy-menu-item");
+    if (copyTarget) {
+      copyRowToDate(row, copyTarget.dataset.date);
+      return;
+    }
+    if (isExpanded) return;
+    expandedId = row.id;
+    rerender();
+  };
+
+  return el;
 }
 
 function renderDayStrip() {
@@ -436,25 +613,13 @@ function renderRow(row, date) {
   const isExpanded = expandedId === row.id;
   if (isExpanded) el.classList.add("expanded");
 
-  const isLoading = editFetchTargetId === row.id;
-  const editBtn = isLoading
-    ? `<button type="button" class="button edit-button" disabled>Syncing…</button>`
-    : `<button type="button" class="button edit-button">Edit</button>`;
-  const badge = row.category ? `<span class="cat-badge cat-${row.category}">${categoryLabel(row.category)}</span>` : "";
-  const actions = isExpanded ? `
-    <div class="row-actions">
-      <button type="button" class="button copy-button" popovertarget="${copyMenuId(row)}">Copy</button>
-      ${editBtn}
-      ${renderCopyMenu(row)}
-    </div>
-  ` : "";
   el.innerHTML = `
     <div class="row-time">${formatTime(row._displayTime ?? row.time, getTimeFormat())}</div>
     <div class="row-info">
-      <div class="row-title">${badge}${escapeHtml(row.title || "(untitled)")}</div>
-      ${row.description ? `<div class="row-desc">${escapeHtml(isExpanded ? row.description : row.description.split(/\r?\n/).map(s => s.trim()).filter(Boolean).join(", "))}</div>` : ""}
+      <div class="row-title">${badgeHtml(row.category)}${escapeHtml(row.title || "(untitled)")}</div>
+      ${descHtml(row.description, isExpanded)}
     </div>
-    ${actions}
+    ${isExpanded ? actionsHtml(row) : ""}
   `;
 
   el.onclick = (e) => {
@@ -469,7 +634,7 @@ function renderRow(row, date) {
     }
     if (isExpanded) return;
     expandedId = row.id;
-    renderDay();
+    rerender();
   };
 
   return el;
@@ -514,7 +679,7 @@ async function enterEdit(row, viewDate) {
   if (editFetchTargetId) return;
   editFetchTargetId = row.id;
   const sourceDate = row._sourceDate || viewDate;
-  renderDay();
+  rerender();
   try {
     if (hasCreds()) {
       // Pull latest before opening so the user's edits can't overwrite
@@ -537,7 +702,7 @@ async function enterEdit(row, viewDate) {
     expandedId = null;
   } finally {
     editFetchTargetId = null;
-    renderDay();
+    rerender();
   }
 }
 
@@ -578,7 +743,7 @@ function renderEditForm(buf, isExisting) {
       </label>
       <label>Highlight
         <div class="hl-picker">
-          ${["none", "green", "yellow", "red"].map((c) => `
+          ${["none", ...HIGHLIGHTS].map((c) => `
             <button type="button" class="hl-button hl-${c}${hl === c ? " selected" : ""}" data-hl="${c}" aria-label="${c}"></button>
           `).join("")}
         </div>
@@ -634,7 +799,7 @@ function wireEditForm(el, date) {
         editBuffer.endDate = editBuffer._startDate || editBuffer._sourceDate;
         editBuffer.endTime = nowHHMM();
       }
-      renderDay();
+      rerender();
     };
   });
   el.querySelectorAll(".hl-button").forEach((btn) => {
@@ -642,7 +807,7 @@ function wireEditForm(el, date) {
       const next = btn.dataset.hl === "none" ? null : btn.dataset.hl;
       if (editBuffer.highlight === next) return;
       editBuffer.highlight = next;
-      renderDay();
+      rerender();
     };
   });
   el.querySelector(".form").onsubmit = (e) => {
@@ -667,7 +832,7 @@ function wireEditForm(el, date) {
     else state.days[newDate].push(cleaned);
     const id = editingId;
     exitEdit();
-    if (newDate !== sourceDate) {
+    if (newDate !== sourceDate && !isCategoryView()) {
       // Date was changed — follow the row to its new home.
       location.hash = "#/" + newDate;
       saveState();
@@ -678,7 +843,7 @@ function wireEditForm(el, date) {
   };
   el.querySelector(".cancel-button").onclick = () => {
     exitEdit();
-    renderDay();
+    rerender();
   };
   el.querySelector(".delete-button")?.addEventListener("click", () => {
     const label = editBuffer.title?.trim() || "this row";
@@ -701,14 +866,14 @@ function addRow(date) {
     _sourceDate: date, _startDate: date,
   };
   expandedId = null;
-  renderDay();
+  rerender();
 }
 
 document.addEventListener("click", (e) => {
   if (e.target.closest(COLLAPSE_IGNORE)) return;
   if (expandedId === null) return;
   expandedId = null;
-  renderDay();
+  rerender();
 });
 
 document.addEventListener("keydown", (e) => {
@@ -719,12 +884,13 @@ document.addEventListener("keydown", (e) => {
     document.querySelector(".cancel-button")?.click();
   } else if (expandedId) {
     expandedId = null;
-    renderDay();
+    rerender();
   }
 });
 
 window.addEventListener("hashchange", () => {
-  expandedId = null;
+  expandedId = pendingExpandId;
+  pendingExpandId = null;
   exitEdit();
   render();
 });
@@ -735,9 +901,30 @@ function setupTimeFormatToggle() {
   btn.onclick = () => {
     localStorage.setItem(TIME_FORMAT_KEY, getTimeFormat() === "12h" ? "24h" : "12h");
     sync();
-    renderDay();
+    rerender();
   };
   sync();
+}
+
+function setupViewToggle() {
+  const btn = document.querySelector("#view-toggle");
+  btn.onclick = () => {
+    if (editingId) {
+      flashSaved("Finish editing first");
+      return;
+    }
+    if (isCategoryView()) {
+      // Return to a sensible day: today (if in range) else trip start.
+      const todayStr = toIsoDate(new Date());
+      let target;
+      if (todayStr < START_DATE) target = START_DATE;
+      else if (todayStr > END_DATE) target = END_DATE;
+      else target = todayStr;
+      location.hash = "#/" + target;
+    } else {
+      location.hash = "#/all";
+    }
+  };
 }
 
 function setupReloadButton() {
@@ -758,7 +945,7 @@ function setupReloadButton() {
 
 function routeAndRender() {
   const initialHash = location.hash.slice(2);
-  if (DATES.includes(initialHash)) {
+  if (initialHash === "all" || DATES.includes(initialHash)) {
     render();
     return;
   }
@@ -773,6 +960,7 @@ function routeAndRender() {
 
 async function initApp() {
   setupTimeFormatToggle();
+  setupViewToggle();
   setupReloadButton();
   routeAndRender(); // render cached state immediately so slow networks don't blank the screen
   await syncFromRemote("Offline — using cached data");
