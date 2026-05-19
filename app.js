@@ -384,6 +384,12 @@ function rerender() {
   else renderDay();
 }
 
+function pinHtml(location) {
+  if (!location) return "";
+  const href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+  return `<a class="row-pin" href="${href}" target="_blank" rel="noopener" aria-label="Open location in Google Maps" title="Open in Google Maps">📍</a>`;
+}
+
 function badgeHtml(category) {
   if (!category) return "";
   return `<span class="cat-badge cat-${category}">${categoryLabel(category)}</span>`;
@@ -508,10 +514,12 @@ function renderCategoryRow(row, date) {
       <div class="row-title">${badgeHtml(row.category)}${escapeHtml(row.title || "(untitled)")}</div>
       ${descHtml(row.description, isExpanded)}
     </div>
+    ${pinHtml(row.location)}
     ${isExpanded ? actionsHtml(row, jumpBtn) : ""}
   `;
 
   el.onclick = (e) => {
+    if (e.target.closest(".row-pin")) return;
     if (e.target.classList.contains("edit-button")) {
       enterEdit(row, date);
       return;
@@ -619,10 +627,12 @@ function renderRow(row, date) {
       <div class="row-title">${badgeHtml(row.category)}${escapeHtml(row.title || "(untitled)")}</div>
       ${descHtml(row.description, isExpanded)}
     </div>
+    ${pinHtml(row.location)}
     ${isExpanded ? actionsHtml(row) : ""}
   `;
 
   el.onclick = (e) => {
+    if (e.target.closest(".row-pin")) return;
     if (e.target.classList.contains("edit-button")) {
       enterEdit(row, date);
       return;
@@ -738,6 +748,9 @@ function renderEditForm(buf, isExisting) {
       <label>Title
         <input class="input" type="text" data-field="title" value="${escapeHtml(buf.title || "")}" placeholder="What’s happening?">
       </label>
+      <label>Location
+        <input class="input" type="text" data-field="location" value="${escapeHtml(buf.location || "")}" placeholder="Address or place name (optional)">
+      </label>
       <label>Description
         <textarea class="input" data-field="description" rows="3" placeholder="Details, reservation #, notes…">${escapeHtml(buf.description || "")}</textarea>
       </label>
@@ -819,6 +832,8 @@ function wireEditForm(el, date) {
     delete cleaned._startDate;
     if (!cleaned.category) delete cleaned.category;
     if (!cleaned.highlight) delete cleaned.highlight;
+    if (!cleaned.location || !cleaned.location.trim()) delete cleaned.location;
+    else cleaned.location = cleaned.location.trim();
     if (cleaned.category !== "lodging") {
       delete cleaned.endDate;
       delete cleaned.endTime;

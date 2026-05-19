@@ -419,6 +419,27 @@ main {
   margin-top: 0.2rem;
 }
 
+.row:has(> .row-pin) { padding-right: 2.25rem; }
+
+.row-pin {
+  align-items: center;
+  display: inline-flex;
+  font-size: 1rem;
+  height: 1.5rem;
+  justify-content: center;
+  line-height: 1;
+  position: absolute;
+  right: 0.5rem;
+  text-decoration: none;
+  top: 0.5rem;
+  width: 1.5rem;
+
+  @media (pointer: fine) {
+    border-radius: var(--radius-sm);
+    &:hover { background: var(--border); }
+  }
+}
+
 /* Popover defaults centre in the viewport; anchor() resolves to the
    popovertarget invoker (the Copy button). */
 .copy-menu {
