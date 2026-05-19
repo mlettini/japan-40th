@@ -13,16 +13,24 @@
     <h1>Japan 40th 🇯🇵</h1>
     <div class="title-bar-right">
       <span id="save-indicator">Saved</span>
-      <button type="button" class="button header-button" id="time-format-toggle" aria-label="Toggle time format">24h</button>
       <button type="button" class="button header-button" id="reload-button" aria-label="Reload from remote">Reload</button>
+      <button type="button" class="button header-button" id="time-format-toggle" aria-label="Toggle time format">24h</button>
+      <button type="button" class="button header-button" id="view-toggle" aria-label="Toggle view">Daily</button>
     </div>
   </div>
   <nav id="day-strip" aria-label="Days"></nav>
 </header>
 <main>
-  <h2 id="day-title"></h2>
-  <div id="day-note-wrapper"></div>
-  <div id="rows"></div>
+  <div id="day-view">
+    <h2 id="day-title"></h2>
+    <div id="day-note-wrapper"></div>
+    <div id="rows"></div>
+  </div>
+  <div id="category-view" hidden>
+    <h2 id="category-title">Rows by category</h2>
+    <div id="hl-filter-bar" role="toolbar" aria-label="Filter by highlight"></div>
+    <div id="category-list"></div>
+  </div>
 </main>
 
 <div id="setup-screen">
