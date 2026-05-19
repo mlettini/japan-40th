@@ -369,9 +369,14 @@ function render() {
   document.querySelector("#category-view").hidden = !inCat;
   document.querySelector("#day-strip").hidden = inCat;
   document.querySelector("#view-toggle").textContent = inCat ? "Category" : "Daily";
+  // Clear the inactive view — leftover rows share copy-menu IDs with the
+  // active view, and popovertarget's getElementById would resolve to the
+  // hidden ones first.
   if (inCat) {
+    document.querySelector("#rows").innerHTML = "";
     renderCategoryView();
   } else {
+    document.querySelector("#category-list").innerHTML = "";
     renderDayStrip();
     renderDay();
   }
@@ -739,7 +744,7 @@ function renderEditForm(buf, isExisting) {
         <input class="input" type="text" data-field="title" value="${escapeHtml(buf.title || "")}" placeholder="What’s happening?">
       </label>
       <label>Description
-        <textarea class="input" data-field="description" rows="3" placeholder="Details, reservation #, notes…">${escapeHtml(buf.description || "")}</textarea>
+        <textarea class="input" data-field="description" rows="5" placeholder="Details, reservation #, notes…">${escapeHtml(buf.description || "")}</textarea>
       </label>
       <label>Highlight
         <div class="hl-picker">
