@@ -17,6 +17,14 @@ const CATEGORIES = [
 
 const HIGHLIGHTS = ["green", "yellow", "red"];
 
+const EMOJI_PICKS = [
+  "✈️", "🚄", "🚇", "🚌", "🚕", "🛳️", "🚲",
+  "🏨", "⛩️", "🏯", "🗼", "🌸", "🗻", "🎎", "🎏", "🎌",
+  "🍣", "🍜", "🍱", "🍙", "🍢", "🍰", "🍵", "☕️", "🍶", "🍺", "🍷",
+  "🛍️", "📸", "🎮", "🎤", "🎂", "🎉", "🎁", "🛁",
+  "☀️", "🌧️", "❄️",
+];
+
 const SAMPLE_DATA = { days: {} };
 
 const DATES = generateDates(START_DATE, END_DATE);
@@ -317,6 +325,10 @@ function isCategoryView() {
   return location.hash === "#/all";
 }
 
+function isGridView() {
+  return location.hash === "#/grid";
+}
+
 function dayRows(date) {
   return state.days[date] || [];
 }
@@ -365,18 +377,29 @@ function formatChip(date) {
 
 function render() {
   const inCat = isCategoryView();
-  document.querySelector("#day-view").hidden = inCat;
+  const inGrid = isGridView();
+  const inDay = !inCat && !inGrid;
+  document.body.classList.toggle("grid-view-active", inGrid);
+  document.querySelector("#day-view").hidden = !inDay;
   document.querySelector("#category-view").hidden = !inCat;
-  document.querySelector("#day-strip").hidden = inCat;
-  document.querySelector("#view-toggle").textContent = inCat ? "Category" : "Daily";
-  // Clear the inactive view — leftover rows share copy-menu IDs with the
+  document.querySelector("#grid-view").hidden = !inGrid;
+  document.querySelector("#day-strip").hidden = !inDay;
+  document.querySelector("#view-toggle").textContent =
+    inGrid ? "Grid" : inCat ? "Category" : "Daily";
+  // Clear inactive views — leftover rows share copy-menu IDs with the
   // active view, and popovertarget's getElementById would resolve to the
   // hidden ones first.
   if (inCat) {
     document.querySelector("#rows").innerHTML = "";
+    document.querySelector("#grid-days").innerHTML = "";
     renderCategoryView();
+  } else if (inGrid) {
+    document.querySelector("#rows").innerHTML = "";
+    document.querySelector("#category-list").innerHTML = "";
+    renderGridView();
   } else {
     document.querySelector("#category-list").innerHTML = "";
+    document.querySelector("#grid-days").innerHTML = "";
     renderDayStrip();
     renderDay();
   }
@@ -385,19 +408,19 @@ function render() {
 // Re-renders just the active view's row list — skips the day-strip and
 // view-toggle update, which never change on row-only mutations.
 function rerender() {
-  if (isCategoryView()) renderCategoryView();
+  if (isGridView()) renderGridView();
+  else if (isCategoryView()) renderCategoryView();
   else renderDay();
-}
-
-function pinHtml(location) {
-  if (!location) return "";
-  const href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
-  return `<a class="row-pin" href="${href}" target="_blank" rel="noopener" aria-label="Open location in Google Maps" title="Open in Google Maps">📍</a>`;
 }
 
 function badgeHtml(category) {
   if (!category) return "";
   return `<span class="cat-badge cat-${category}">${categoryLabel(category)}</span>`;
+}
+
+function emojiHtml(emoji) {
+  if (!emoji) return "";
+  return `<span class="row-emoji">${escapeHtml(emoji)}</span>`;
 }
 
 function descHtml(text, isExpanded) {
@@ -516,15 +539,13 @@ function renderCategoryRow(row, date) {
   el.innerHTML = `
     <div class="row-info">
       <div class="cat-row-date">${dateLabel}</div>
-      <div class="row-title">${badgeHtml(row.category)}${escapeHtml(row.title || "(untitled)")}</div>
+      <div class="row-title">${badgeHtml(row.category)}${emojiHtml(row.emoji)}${escapeHtml(row.title || "(untitled)")}</div>
       ${descHtml(row.description, isExpanded)}
     </div>
-    ${pinHtml(row.location)}
     ${isExpanded ? actionsHtml(row, jumpBtn) : ""}
   `;
 
   el.onclick = (e) => {
-    if (e.target.closest(".row-pin")) return;
     if (e.target.classList.contains("edit-button")) {
       enterEdit(row, date);
       return;
@@ -545,6 +566,304 @@ function renderCategoryRow(row, date) {
   };
 
   return el;
+}
+
+function renderGridView() {
+  const container = document.querySelector("#grid-days");
+  container.innerHTML = "";
+  for (const date of DATES) {
+    container.appendChild(renderDayGrid(date));
+  }
+}
+
+function renderDayGrid(date) {
+  const section = document.createElement("section");
+  section.className = "day-grid";
+  section.dataset.date = date;
+
+  const heading = document.createElement("h3");
+  heading.className = "day-grid-title";
+  heading.textContent = formatDayTitle(date);
+  section.appendChild(heading);
+
+  const table = document.createElement("table");
+  table.className = "grid-table";
+  table.innerHTML = `
+    <colgroup>
+      <col class="col-time"><col class="col-cat"><col class="col-emoji">
+      <col class="col-title"><col class="col-desc"><col class="col-hl"><col class="col-act">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Time</th><th>Category</th><th>Emoji</th>
+        <th>Title</th><th>Description</th><th>HL</th><th></th>
+      </tr>
+    </thead>
+  `;
+  const tbody = document.createElement("tbody");
+  const rows = dayRows(date).slice()
+    .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+  for (const row of rows) tbody.appendChild(renderGridRow(row, date));
+  table.appendChild(tbody);
+  const scroll = document.createElement("div");
+  scroll.className = "grid-scroll";
+  scroll.appendChild(table);
+  section.appendChild(scroll);
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "button day-add-btn";
+  addBtn.textContent = "＋ Add row";
+  addBtn.onclick = () => addGridRowForDate(date);
+  section.appendChild(addBtn);
+
+  return section;
+}
+
+function renderGridRow(row, date) {
+  const tr = document.createElement("tr");
+  tr.className = "grid-row";
+  if (row.category) tr.classList.add("cat-" + row.category);
+  if (row.highlight) tr.classList.add("hl-" + row.highlight);
+  tr.dataset.id = row.id;
+
+  const timeTd = document.createElement("td");
+  timeTd.className = "grid-cell grid-cell-time";
+  const timeInput = document.createElement("input");
+  timeInput.type = "time";
+  timeInput.className = "grid-input";
+  timeInput.value = row.time || "";
+  timeInput.addEventListener("change", () => {
+    row.time = timeInput.value || "";
+    saveState();
+  });
+  timeTd.appendChild(timeInput);
+  tr.appendChild(timeTd);
+
+  const catTd = document.createElement("td");
+  catTd.className = "grid-cell grid-cell-category";
+  const catSelect = document.createElement("select");
+  catSelect.className = "grid-input";
+  for (const c of CATEGORIES) {
+    const opt = document.createElement("option");
+    opt.value = c.value;
+    opt.textContent = c.label;
+    if ((row.category || "") === c.value) opt.selected = true;
+    catSelect.appendChild(opt);
+  }
+  catSelect.addEventListener("change", () => {
+    const wasLodging = row.category === "lodging";
+    const isLodging = catSelect.value === "lodging";
+    for (const c of CATEGORIES) {
+      if (c.value) tr.classList.remove("cat-" + c.value);
+    }
+    if (catSelect.value) {
+      row.category = catSelect.value;
+      tr.classList.add("cat-" + catSelect.value);
+    } else {
+      delete row.category;
+    }
+    // Lodging endDate/endTime stay editable via the full Edit form on day view;
+    // clear them when leaving lodging so they don't linger as orphan fields.
+    if (!isLodging && wasLodging) {
+      delete row.endDate;
+      delete row.endTime;
+    }
+    saveState();
+  });
+  catTd.appendChild(catSelect);
+  tr.appendChild(catTd);
+
+  const emojiTd = document.createElement("td");
+  emojiTd.className = "grid-cell grid-cell-emoji";
+  const emojiPickerId = `emoji-picker-${row.id}`;
+  const emojiBtn = document.createElement("button");
+  emojiBtn.type = "button";
+  emojiBtn.className = "emoji-button";
+  emojiBtn.setAttribute("popovertarget", emojiPickerId);
+  emojiBtn.textContent = row.emoji || "＋";
+  emojiTd.appendChild(emojiBtn);
+  emojiTd.appendChild(renderEmojiPicker(row, emojiPickerId, emojiBtn));
+  tr.appendChild(emojiTd);
+
+  const titleTd = document.createElement("td");
+  titleTd.className = "grid-cell grid-cell-title";
+  const titleInput = document.createElement("input");
+  titleInput.type = "text";
+  titleInput.className = "grid-input grid-input-title";
+  titleInput.value = row.title || "";
+  titleInput.placeholder = "(untitled)";
+  titleInput.addEventListener("input", () => {
+    row.title = titleInput.value;
+    saveState();
+  });
+  titleTd.appendChild(titleInput);
+  tr.appendChild(titleTd);
+
+  const descTd = document.createElement("td");
+  descTd.className = "grid-cell grid-cell-description";
+  const descDisplay = document.createElement("div");
+  descDisplay.className = "grid-description-display";
+  descDisplay.tabIndex = 0;
+  const descArea = document.createElement("textarea");
+  descArea.className = "grid-input grid-description";
+  descArea.rows = 3;
+  descArea.value = row.description || "";
+  descArea.placeholder = "Description";
+  descArea.hidden = true;
+  const refreshDescDisplay = () => {
+    const flat = (row.description || "").replace(/\s*\r?\n\s*/g, " ").trim();
+    descDisplay.textContent = flat || "Description";
+    descDisplay.classList.toggle("muted", !flat);
+  };
+  refreshDescDisplay();
+  descDisplay.addEventListener("focus", () => {
+    descDisplay.hidden = true;
+    descArea.hidden = false;
+    descArea.focus();
+    autoResize(descArea);
+  });
+  descArea.addEventListener("input", () => {
+    const v = descArea.value;
+    if (v) row.description = v;
+    else delete row.description;
+    autoResize(descArea);
+    saveState();
+  });
+  descArea.addEventListener("blur", () => {
+    refreshDescDisplay();
+    descArea.hidden = true;
+    descArea.style.height = "";
+    descDisplay.hidden = false;
+  });
+  descTd.appendChild(descDisplay);
+  descTd.appendChild(descArea);
+  tr.appendChild(descTd);
+
+  const hlTd = document.createElement("td");
+  hlTd.className = "grid-cell grid-cell-highlight";
+  const hlSelect = document.createElement("select");
+  hlSelect.className = "grid-input";
+  for (const o of [{ value: "", label: "—" }, ...HIGHLIGHTS.map(h => ({ value: h, label: h }))]) {
+    const opt = document.createElement("option");
+    opt.value = o.value;
+    opt.textContent = o.label;
+    if ((row.highlight || "") === o.value) opt.selected = true;
+    hlSelect.appendChild(opt);
+  }
+  hlSelect.addEventListener("change", () => {
+    for (const h of HIGHLIGHTS) tr.classList.remove("hl-" + h);
+    if (hlSelect.value) {
+      row.highlight = hlSelect.value;
+      tr.classList.add("hl-" + hlSelect.value);
+    } else {
+      delete row.highlight;
+    }
+    saveState();
+  });
+  hlTd.appendChild(hlSelect);
+  tr.appendChild(hlTd);
+
+  const actionTd = document.createElement("td");
+  actionTd.className = "grid-cell grid-cell-actions";
+  actionTd.innerHTML = `<button type="button" class="button grid-delete-button" aria-label="Delete row">✕</button>`;
+  actionTd.querySelector(".grid-delete-button").onclick = () => {
+    const label = row.title?.trim() || "this row";
+    if (!confirm(`Delete ${label}?`)) return;
+    removeRow(date, row.id);
+    tr.remove();
+    saveState();
+  };
+  tr.appendChild(actionTd);
+
+  return tr;
+}
+
+function renderEmojiPicker(row, popoverId, emojiBtn) {
+  const popover = document.createElement("div");
+  popover.id = popoverId;
+  popover.setAttribute("popover", "auto");
+  popover.className = "emoji-picker";
+
+  // Build the 38 picks + custom input + clear button on first open. Pre-building
+  // them for every row costs thousands of nodes/closures the user mostly never sees.
+  let built = false;
+  popover.addEventListener("beforetoggle", (e) => {
+    if (e.newState !== "open" || built) return;
+    built = true;
+
+    const grid = document.createElement("div");
+    grid.className = "emoji-grid";
+    for (const emoji of EMOJI_PICKS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "emoji-pick";
+      b.textContent = emoji;
+      b.onclick = () => {
+        row.emoji = emoji;
+        emojiBtn.textContent = emoji;
+        customInput.value = emoji;
+        saveState();
+        popover.hidePopover();
+      };
+      grid.appendChild(b);
+    }
+    popover.appendChild(grid);
+
+    const footer = document.createElement("div");
+    footer.className = "emoji-footer";
+    const customInput = document.createElement("input");
+    customInput.type = "text";
+    customInput.className = "input emoji-custom";
+    customInput.placeholder = "Type any emoji";
+    customInput.maxLength = 8;
+    customInput.value = row.emoji || "";
+    customInput.addEventListener("input", () => {
+      const v = customInput.value.trim();
+      if (v) row.emoji = v;
+      else delete row.emoji;
+      emojiBtn.textContent = v || "＋";
+      saveState();
+    });
+    footer.appendChild(customInput);
+
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.className = "button emoji-clear";
+    clearBtn.textContent = "Clear";
+    clearBtn.onclick = () => {
+      delete row.emoji;
+      emojiBtn.textContent = "＋";
+      customInput.value = "";
+      saveState();
+      popover.hidePopover();
+    };
+    footer.appendChild(clearBtn);
+    popover.appendChild(footer);
+  });
+
+  return popover;
+}
+
+function addGridRowForDate(date) {
+  if (editingId) {
+    flashSaved("Finish editing first");
+    return;
+  }
+  const id = newId();
+  const row = { id, time: "", title: "" };
+  if (!state.days[date]) state.days[date] = [];
+  state.days[date].push(row);
+  saveState();
+  const section = document.querySelector(`.day-grid[data-date="${date}"]`);
+  const tbody = section?.querySelector("tbody");
+  if (tbody) {
+    const tr = renderGridRow(row, date);
+    tbody.appendChild(tr);
+    requestAnimationFrame(() => {
+      tr.querySelector(".grid-cell-title .grid-input")?.focus();
+    });
+  }
 }
 
 function renderDayStrip() {
@@ -629,15 +948,13 @@ function renderRow(row, date) {
   el.innerHTML = `
     <div class="row-time">${formatTime(row._displayTime ?? row.time, getTimeFormat())}</div>
     <div class="row-info">
-      <div class="row-title">${badgeHtml(row.category)}${escapeHtml(row.title || "(untitled)")}</div>
+      <div class="row-title">${badgeHtml(row.category)}${emojiHtml(row.emoji)}${escapeHtml(row.title || "(untitled)")}</div>
       ${descHtml(row.description, isExpanded)}
     </div>
-    ${pinHtml(row.location)}
     ${isExpanded ? actionsHtml(row) : ""}
   `;
 
   el.onclick = (e) => {
-    if (e.target.closest(".row-pin")) return;
     if (e.target.classList.contains("edit-button")) {
       enterEdit(row, date);
       return;
@@ -750,11 +1067,11 @@ function renderEditForm(buf, isExisting) {
           <input class="input" type="datetime-local" data-field="end" value="${endDt}"${startDt ? ` min="${startDt}"` : ""}>
         </label>
       ` : ""}
+      <label>Emoji
+        <input class="input" type="text" data-field="emoji" value="${escapeHtml(buf.emoji || "")}" placeholder="🍣" maxlength="8">
+      </label>
       <label>Title
         <input class="input" type="text" data-field="title" value="${escapeHtml(buf.title || "")}" placeholder="What’s happening?">
-      </label>
-      <label>Location
-        <input class="input" type="text" data-field="location" value="${escapeHtml(buf.location || "")}" placeholder="Address or place name (optional)">
       </label>
       <label>Description
         <textarea class="input" data-field="description" rows="5" placeholder="Details, reservation #, notes…">${escapeHtml(buf.description || "")}</textarea>
@@ -837,8 +1154,10 @@ function wireEditForm(el, date) {
     delete cleaned._startDate;
     if (!cleaned.category) delete cleaned.category;
     if (!cleaned.highlight) delete cleaned.highlight;
-    if (!cleaned.location || !cleaned.location.trim()) delete cleaned.location;
-    else cleaned.location = cleaned.location.trim();
+    if (!cleaned.emoji || !cleaned.emoji.trim()) delete cleaned.emoji;
+    else cleaned.emoji = cleaned.emoji.trim();
+    if (!cleaned.description) delete cleaned.description;
+    delete cleaned.location;
     if (cleaned.category !== "lodging") {
       delete cleaned.endDate;
       delete cleaned.endTime;
@@ -934,6 +1253,8 @@ function setupViewToggle() {
       return;
     }
     if (isCategoryView()) {
+      location.hash = "#/grid";
+    } else if (isGridView()) {
       // Return to a sensible day: today (if in range) else trip start.
       const todayStr = toIsoDate(new Date());
       let target;
@@ -965,7 +1286,7 @@ function setupReloadButton() {
 
 function routeAndRender() {
   const initialHash = location.hash.slice(2);
-  if (initialHash === "all" || DATES.includes(initialHash)) {
+  if (initialHash === "all" || initialHash === "grid" || DATES.includes(initialHash)) {
     render();
     return;
   }

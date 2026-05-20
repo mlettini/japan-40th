@@ -164,7 +164,7 @@ header {
   align-items: center;
   display: flex;
   justify-content: space-between;
-  padding: 0.8rem 1rem 0;
+  padding: 0.8rem 1rem;
   h1 {
     font-size: 1.2rem;
     font-weight: 600;
@@ -207,9 +207,10 @@ header {
   max-width: max-content;
   -webkit-overflow-scrolling: touch;
   overflow-x: auto;
-  padding: 0.8rem;
+  padding: 0 0.8rem 0.8rem;
 
   &::-webkit-scrollbar { display: none; }
+  &[hidden] { display: none; }
 }
 
 .day-chip {
@@ -417,27 +418,6 @@ main {
   grid-column: 1 / -1;
   justify-content: flex-end;
   margin-top: 0.2rem;
-}
-
-.row:has(> .row-pin) { padding-right: 2.25rem; }
-
-.row-pin {
-  align-items: center;
-  display: inline-flex;
-  font-size: 1rem;
-  height: 1.5rem;
-  justify-content: center;
-  line-height: 1;
-  position: absolute;
-  right: 0.5rem;
-  text-decoration: none;
-  top: 0.5rem;
-  width: 1.5rem;
-
-  @media (pointer: fine) {
-    border-radius: var(--radius-sm);
-    &:hover { background: var(--border); }
-  }
 }
 
 /* Popover defaults centre in the viewport; anchor() resolves to the
@@ -720,4 +700,252 @@ body.needs-setup > main { display: none; }
   min-height: 1.2rem;
 
   &:empty { display: none; }
+}
+
+
+
+/* GRID VIEW */
+
+body.grid-view-active main {
+  max-width: none;
+  padding: 1rem 1.5rem 5rem;
+}
+
+#grid-title { display: none; } /* day headings provide enough context */
+
+#grid-days {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.day-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.day-grid-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.day-add-btn {
+  align-self: flex-start;
+  font-size: var(--text-sm);
+  padding: 0.3rem 0.6rem;
+}
+
+.grid-scroll {
+  -webkit-overflow-scrolling: touch;
+  overflow-x: auto;
+}
+
+.grid-table {
+  border: 1px solid var(--border);
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--text-sm);
+  min-width: 50rem;
+  width: 100%;
+}
+
+.grid-table col.col-time   { width: 6rem; }
+.grid-table col.col-cat    { width: 8rem; }
+.grid-table col.col-emoji  { width: 4rem; }
+.grid-table col.col-title  { width: 18rem; }
+.grid-table col.col-desc   { width: auto; }
+.grid-table col.col-hl     { width: 6rem; }
+.grid-table col.col-act    { width: 3rem; }
+
+.grid-input-title { font-weight: 500; }
+
+.grid-description-display {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: text;
+  font-size: 0.85em;
+  margin-top: 0.15rem;
+  overflow: hidden;
+  padding: 0.35rem 0.45rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &.muted { color: var(--text-muted); opacity: 0.65; }
+  &:not(.muted) { color: var(--text); }
+
+  @media (pointer: fine) {
+    &:hover { background: color-mix(in srgb, var(--text), transparent 94%); }
+  }
+
+  &:focus { outline: 1px dashed var(--border-hover); outline-offset: -1px; }
+}
+
+textarea.grid-description {
+  display: block;
+  font-size: 0.85em;
+  margin-top: 0.15rem;
+  min-height: 4rem;
+  resize: vertical;
+
+  &[hidden] { display: none; }
+}
+
+.grid-table thead th {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.grid-row {
+  &:not(:last-child) > .grid-cell { border-bottom: 1px solid var(--border); }
+
+  &.hl-green { background: var(--hl-green-bg); }
+  &.hl-yellow { background: var(--hl-yellow-bg); }
+  &.hl-red { background: var(--hl-red-bg); }
+}
+
+.grid-cell {
+  background: var(--surface);
+  padding: 0.2rem 0.3rem;
+  vertical-align: text-bottom;
+
+  &.grid-cell-actions {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  &.grid-cell-title {
+    min-width: 200px;
+  }
+
+  &.grid-cell-description {
+    max-width: 400px;
+    min-width: 200px;
+  }
+}
+
+.grid-input {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  padding: 0.35rem 0.45rem;
+  width: 100%;
+
+  @media (pointer: fine) {
+    &:hover:not(:focus) {
+      background: color-mix(in srgb, var(--text), transparent 94%);
+    }
+  }
+
+  &:focus {
+    background: var(--surface);
+    border-color: var(--border-hover);
+    outline: none;
+  }
+
+  &::placeholder { color: var(--text-muted); }
+}
+
+select.grid-input { padding: 0.3rem 0.3rem; }
+
+.grid-delete-button {
+  color: var(--accent);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* Emoji column + picker */
+
+.emoji-button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.3rem 0.4rem;
+  width: 100%;
+
+  @media (pointer: fine) {
+    &:hover { background: color-mix(in srgb, var(--text), transparent 94%); }
+  }
+}
+
+.emoji-picker {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px var(--shadow);
+  margin: auto;
+  max-width: 22rem;
+  padding: 0.8rem;
+  width: max-content;
+
+  &::backdrop {
+    background: color-mix(in srgb, #000, transparent 65%);
+  }
+}
+
+.emoji-grid {
+  display: grid;
+  gap: 0.2rem;
+  grid-template-columns: repeat(8, 1fr);
+}
+
+.emoji-pick {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 0.3rem;
+
+  @media (pointer: fine) {
+    &:hover { background: color-mix(in srgb, var(--text), transparent 90%); }
+  }
+}
+
+.emoji-footer {
+  align-items: center;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+
+  .emoji-custom { flex: 1; min-width: 0; }
+  .emoji-clear { flex: 0 0 auto; font-size: 0.8rem; padding: 0.3rem 0.6rem; }
+}
+
+/* Inline emoji prefix (used in daily + category views) */
+.row-emoji {
+  display: inline;
+  font-size: 1.1em;
+  margin-right: 0.15em;
+  vertical-align: baseline;
+}
+
+@media (max-width: 720px) {
+  body.grid-view-active main { padding: 1rem 0.6rem 5rem; }
+  .grid-table col.col-cat    { width: 6.5rem; }
+  .grid-table col.col-title  { width: 14rem; }
+  .grid-table col.col-hl     { width: 5rem; }
+  .grid-table thead th { font-size: 0.65rem; padding: 0.3rem 0.3rem; }
+  .grid-cell { padding: 0.15rem 0.2rem; }
 }
